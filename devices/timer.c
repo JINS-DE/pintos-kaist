@@ -125,6 +125,8 @@ timer_elapsed(int64_t then)
 
 /* 약 TICKS 만큼의 타이머 틱 동안 실행을 중단합니다. */
 // 타이머 틱 수(ticks) 동안 현재 스레드의 실행을 중단하는 역할
+/* TODO : timer sleep를 다시 구현한다. */
+/* BUSY WAIT를 사용할 필요 없도록 구현한다. */
 void timer_sleep(int64_t ticks)
 {
 	// 현재 시점 기록
