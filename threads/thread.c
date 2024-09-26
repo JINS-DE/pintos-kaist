@@ -63,8 +63,6 @@ static void do_schedule(int status);
 static void schedule(void);
 static tid_t allocate_tid(void);
 
-
-
 /* T가 유효한 스레드를 가리키는 것으로 보이면 true를 반환. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
 
@@ -257,12 +255,28 @@ void thread_block(void)
 	schedule();								   // 4. 스케줄러를 호출하여 다음 스레드를 실행
 }
 
+bool less_wake_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	const struct thread *t_a = list_entry(a, struct thread, elem);
+	const struct thread *t_b = list_entry(b, struct thread, elem);
+	return t_a->wake_ticks < t_b->wake_ticks;
+}
+
+bool batter_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+	const struct thread *t_a = list_entry(a, struct thread, elem);
+	const struct thread *t_b = list_entry(b, struct thread, elem);
+	return t_a->priority > t_b->priority;
+}
+
 void thread_sleep(int64_t ticks)
 {
 	struct thread *th = thread_current();
 	th->wake_ticks = ticks;
-	list_push_back(&sleep_list, &th->elem);	
+	enum intr_level old_level = intr_disable();
+	list_insert_ordered(&sleep_list, &th->elem, less_wake_ticks, NULL);
 	thread_block();
+	intr_set_level(old_level);
 }
 
 void check_thread_tick(int64_t ticks)
@@ -270,18 +284,22 @@ void check_thread_tick(int64_t ticks)
 	struct list_elem *e;
 	struct thread *t;
 
-	for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
+	for (e = list_begin(&sleep_list); e != list_end(&sleep_list); e = list_next(e))
+	{
+		t = list_entry(e, struct thread, elem);
+		if (t->wake_ticks <= ticks)
 		{
-			t = list_entry(e, struct thread, elem);
-			if (t->wake_ticks == ticks)
-			{
-				struct list_elem *temp;
-				temp = list_prev(e);
-				list_remove(e);
-				e = temp;
-				thread_unblock(t);				
-			}
+			struct list_elem *temp;
+			temp = list_prev(e);
+			list_remove(e);
+			e = temp;
+			thread_unblock(t);
 		}
+		else
+		{
+			break;
+		}
+	}
 }
 
 /* 차단된 스레드 T를 실행 준비 상태로 전환합니다.
@@ -305,7 +323,7 @@ void thread_unblock(struct thread *t)
 	ASSERT(t->status == THREAD_BLOCKED);
 
 	// 4. 준비 리스트에 스레드를 추가합니다.
-	list_push_back(&ready_list, &t->elem);
+	list_insert_ordered(&ready_list, &t->elem, batter_priority, NULL);
 
 	// 5. 스레드를 THREAD_READY 상태로 전환합니다.
 	t->status = THREAD_READY;
@@ -380,7 +398,7 @@ void thread_yield(void)
 	// 유휴 스레드가 아니면
 	if (curr != idle_thread)
 		// ready 리스트에 집어넣기
-		list_push_back(&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, batter_priority, NULL);
 	// 스케쥴러 동작
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
