@@ -26,6 +26,7 @@
 /* THREAD_READY 상태의 프로세스 목록, 즉 실행 준비가 완료되었지만
    실제로 실행되지 않은 프로세스 목록. */
 static struct list ready_list;
+static struct list sleep_list;
 
 /* 유휴 스레드. */
 static struct thread *idle_thread;
@@ -61,6 +62,8 @@ static void init_thread(struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule(void);
 static tid_t allocate_tid(void);
+
+
 
 /* T가 유효한 스레드를 가리키는 것으로 보이면 true를 반환. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -112,6 +115,8 @@ void thread_init(void)
 	lock_init(&tid_lock);
 	// 실행 준비가 된 스레드들을 저장할 준비 리스트를 초기화
 	list_init(&ready_list);
+	// 잠잘 준비가 된 스레드들을 저장할 수면 리스트를 초기화
+	list_init(&sleep_list);
 	// 파괴 요청이 들어온 스레드들을 저장할 리스트를 초기화
 	list_init(&destruction_req);
 
@@ -250,6 +255,33 @@ void thread_block(void)
 	ASSERT(intr_get_level() == INTR_OFF);	   // 2. 확인: 인터럽트가 비활성화된 상태인지 확인
 	thread_current()->status = THREAD_BLOCKED; // 3. 현재 스레드의 상태를 BLOCKED로 변경
 	schedule();								   // 4. 스케줄러를 호출하여 다음 스레드를 실행
+}
+
+void thread_sleep(int64_t ticks)
+{
+	struct thread *th = thread_current();
+	th->wake_ticks = ticks;
+	list_push_back(&sleep_list, &th->elem);	
+	thread_block();
+}
+
+void check_thread_tick(int64_t ticks)
+{
+	struct list_elem *e;
+	struct thread *t;
+
+	for (e = list_begin (&sleep_list); e != list_end (&sleep_list); e = list_next (e))
+		{
+			t = list_entry(e, struct thread, elem);
+			if (t->wake_ticks == ticks)
+			{
+				struct list_elem *temp;
+				temp = list_prev(e);
+				list_remove(e);
+				e = temp;
+				thread_unblock(t);				
+			}
+		}
 }
 
 /* 차단된 스레드 T를 실행 준비 상태로 전환합니다.

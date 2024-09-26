@@ -137,8 +137,11 @@ void timer_sleep(int64_t ticks)
 
 	// 경과 시간이 원하는 타이머 틱(ticks) 수보다 작으면 계속 CPU를 양보
 	// 현재 timer_ticks - start 틱보다 작으면 계속 중단
-	while (timer_elapsed(start) < ticks)
-		thread_yield();
+	
+	// while (timer_elapsed(start) < ticks)
+	// 	thread_yield();
+
+	thread_sleep(start + ticks);
 }
 
 /* 약 MS 밀리초 동안 실행을 중단합니다. */
@@ -172,6 +175,7 @@ timer_interrupt(struct intr_frame *args UNUSED)
 	// 인터럽트를 실행했으니 틱 증가
 	ticks++;	   // 시스템이 시작된 이후 경과한 타이머 틱 수를 증가시킴
 	thread_tick(); // 스레드 관련 타이머 기능을 처리 // 스레드 틱도 증가시킴
+	check_thread_tick(ticks);
 }
 
 /* LOOPS 반복이 하나의 타이머 틱 이상 대기하는 경우 true를 반환하고,
