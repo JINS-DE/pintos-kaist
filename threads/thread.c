@@ -262,7 +262,7 @@ bool less_wake_ticks(const struct list_elem *a, const struct list_elem *b, void 
 	return t_a->wake_ticks < t_b->wake_ticks;
 }
 
-bool batter_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+bool better_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
 	const struct thread *t_a = list_entry(a, struct thread, elem);
 	const struct thread *t_b = list_entry(b, struct thread, elem);
@@ -323,7 +323,7 @@ void thread_unblock(struct thread *t)
 	ASSERT(t->status == THREAD_BLOCKED);
 
 	// 4. 준비 리스트에 스레드를 추가합니다.
-	list_insert_ordered(&ready_list, &t->elem, batter_priority, NULL);
+	list_insert_ordered(&ready_list, &t->elem, better_priority, NULL);
 
 	// 5. 스레드를 THREAD_READY 상태로 전환합니다.
 	t->status = THREAD_READY;
@@ -398,7 +398,7 @@ void thread_yield(void)
 	// 유휴 스레드가 아니면
 	if (curr != idle_thread)
 		// ready 리스트에 집어넣기
-		list_insert_ordered(&ready_list, &curr->elem, batter_priority, NULL);
+		list_insert_ordered(&ready_list, &curr->elem, better_priority, NULL);
 	// 스케쥴러 동작
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
