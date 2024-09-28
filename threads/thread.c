@@ -238,10 +238,19 @@ tid_t thread_create(const char *name, int priority,
 	// 스레드를 실행 준비 상태로 만든다.
 	// THREAD_READY 상태로 설정하고 실행 큐에 추가
 	thread_unblock(t);
+	// 현재 실행중인 스레드를 ready
+
+	check_priority_threads(thread_get_priority());
 
 	return tid;
 }
-
+void set_priority_thread(void)
+{
+	ASSERT(!intr_context());				   // 1. 확인: 인터럽트 컨텍스트에서 호출되지 않았는지 검사
+	ASSERT(intr_get_level() == INTR_OFF);	   // 2. 확인: 인터럽트가 비활성화된 상태인지 확인
+	thread_current()->status = THREAD_BLOCKED; // 3. 현재 스레드의 상태를 BLOCKED로 변경
+	schedule();								   // 4. 스케줄러를 호출하여 다음 스레드를 실행
+}
 /* 현재 스레드를 잠자게 합니다. thread_unblock()에 의해 깨어날 때까지
    다시 스케줄링되지 않습니다.
 
@@ -284,21 +293,11 @@ void check_thread_tick(int64_t ticks)
 	struct list_elem *e;
 	struct thread *t;
 
-	for (e = list_begin(&sleep_list); e != list_end(&sleep_list); e = list_next(e))
+	while (!list_empty(&sleep_list) && list_entry(list_front(&sleep_list), struct thread, elem)->wake_ticks <= ticks)
 	{
-		t = list_entry(e, struct thread, elem);
-		if (t->wake_ticks <= ticks)
-		{
-			struct list_elem *temp;
-			temp = list_prev(e);
-			list_remove(e);
-			e = temp;
-			thread_unblock(t);
-		}
-		else
-		{
-			break;
-		}
+		struct thread *awake_thread = list_entry(list_pop_front(&sleep_list), struct thread, elem);
+
+		thread_unblock(awake_thread);
 	}
 }
 
@@ -407,7 +406,21 @@ void thread_yield(void)
 /* 현재 스레드의 우선 순위를 NEW_PRIORITY로 설정합니다. */
 void thread_set_priority(int new_priority)
 {
+	// list_entry(list_front(&sleep_list), struct thread, elem)->wake_ticks
 	thread_current()->priority = new_priority;
+	check_priority_threads(new_priority);
+}
+
+void check_priority_threads(int priority)
+{
+	if (list_empty(&ready_list))
+	{
+		return;
+	}
+	if (priority < list_entry(list_front(&ready_list), struct thread, elem)->priority)
+	{
+		thread_yield();
+	}
 }
 
 /* 현재 스레드의 우선 순위를 반환합니다. */
