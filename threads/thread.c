@@ -175,7 +175,10 @@ void thread_tick(void)
 	//  타임 슬라이스는 스레드가 CPU를 독점하지 않도록 제한된 시간 동안만 실행되게 하는 방법
 	if (++thread_ticks >= TIME_SLICE)
 		// 다음 스케줄링 시점에 CPU를 다른 스레드에게 양보
-		intr_yield_on_return();
+		if (!list_empty(&ready_list))
+		{ //
+			intr_yield_on_return();
+		}
 }
 
 /* 스레드 통계를 출력합니다. */
@@ -240,25 +243,19 @@ tid_t thread_create(const char *name, int priority,
 	thread_unblock(t);
 	// 현재 실행중인 스레드를 ready
 
-	check_priority_threads(thread_get_priority());
-
-	struct thread *t_cur = thread_current();
-
-	if (t_cur->priority < priority) {
-		// enum intr_level old_level = intr_disable();
+	if (check_priority_threads())
+	{
 		thread_yield();
-		// intr_set_level(old_level);
 	}
-
 	return tid;
 }
-void set_priority_thread(void)
-{
-	ASSERT(!intr_context());				   // 1. 확인: 인터럽트 컨텍스트에서 호출되지 않았는지 검사
-	ASSERT(intr_get_level() == INTR_OFF);	   // 2. 확인: 인터럽트가 비활성화된 상태인지 확인
-	thread_current()->status = THREAD_BLOCKED; // 3. 현재 스레드의 상태를 BLOCKED로 변경
-	schedule();								   // 4. 스케줄러를 호출하여 다음 스레드를 실행
-}
+// void set_priority_thread(void)
+// {
+// 	ASSERT(!intr_context());				   // 1. 확인: 인터럽트 컨텍스트에서 호출되지 않았는지 검사
+// 	ASSERT(intr_get_level() == INTR_OFF);	   // 2. 확인: 인터럽트가 비활성화된 상태인지 확인
+// 	thread_current()->status = THREAD_BLOCKED; // 3. 현재 스레드의 상태를 BLOCKED로 변경
+// 	schedule();								   // 4. 스케줄러를 호출하여 다음 스레드를 실행
+// }
 /* 현재 스레드를 잠자게 합니다. thread_unblock()에 의해 깨어날 때까지
    다시 스케줄링되지 않습니다.
 
@@ -285,16 +282,21 @@ bool better_priority(const struct list_elem *a, const struct list_elem *b, void 
 	const struct thread *t_b = list_entry(b, struct thread, elem);
 	return t_a->priority > t_b->priority;
 }
-
+bool donate_high_priority(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+	const struct thread *priority_a = list_entry(a, struct thread, donation_elem);
+	const struct thread *priority_b = list_entry(b, struct thread, donation_elem);
+	return priority_a->priority > priority_b->priority;
+}
 void thread_sleep(int64_t ticks)
 {
 	struct thread *th = thread_current();
 	th->wake_ticks = ticks; // ticks에 도달하면 깨우도록, 깨워야 하는 시점을 저장한다.
 
-	enum intr_level old_level = intr_disable(); // 인터럽트 비활성화
+	enum intr_level old_level = intr_disable();							// 인터럽트 비활성화
 	list_insert_ordered(&sleep_list, &th->elem, less_wake_ticks, NULL); // sleep list에 넣기 (ticks순 오름차순)
-	thread_block(); // 현재 쓰레드를 waiter 리스트에 넣기
-	intr_set_level(old_level); // 인터럽트 활성화
+	thread_block();														// 현재 쓰레드를 waiter 리스트에 넣기
+	intr_set_level(old_level);											// 인터럽트 활성화
 }
 
 void check_thread_tick(int64_t ticks)
@@ -411,25 +413,29 @@ void thread_yield(void)
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
 }
+bool check_priority_threads()
+{
+	if (list_empty(&ready_list))
+	{
+		return false;
+	}
+	if (thread_current()->priority < list_entry(list_front(&ready_list), struct thread, elem)->priority)
+	{
+		return true;
+	}
+	return false;
+}
 
 /* 현재 스레드의 우선 순위를 NEW_PRIORITY로 설정합니다. */
 void thread_set_priority(int new_priority)
 {
+	struct thread *t = thread_current();
 	// list_entry(list_front(&sleep_list), struct thread, elem)->wake_ticks
-	thread_current()->priority = new_priority;
-	check_priority_threads(new_priority);
+	t->priority = new_priority;
+	t->init_priority = new_priority;
 
 	refresh_priority();
-	donate_priority();
-}
-
-void check_priority_threads(int priority)
-{
-	if (list_empty(&ready_list))
-	{
-		return;
-	}
-	if (priority < list_entry(list_front(&ready_list), struct thread, elem)->priority)
+	if (check_priority_threads())
 	{
 		thread_yield();
 	}
@@ -546,6 +552,7 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 
+	t->init_priority = priority;
 	list_init(&t->donations);
 }
 
@@ -722,19 +729,43 @@ schedule(void)
 void donate_priority()
 {
 	struct thread *now_thread = thread_current();
-	int max_priority = now_thread->priority;
-	int nested_depth = 8;
-
-	int cnt = 0;
-	while (cnt < 8 || now_thread->wait_on_lock != NULL)
+	struct thread *holder;
+	int depth = 0;
+	while (depth < 8 && now_thread->wait_on_lock != NULL)
 	{
-		now_thread = now_thread->wait_on_lock->holder;
-		now_thread->init_priority = now_thread->priority;
-		now_thread->priority = max_priority;
-		cnt++;
+		holder = now_thread->wait_on_lock->holder;
+		if (holder == NULL) // holder가 NULL인 경우 탈출
+			break;
+		// 현재 스레드의 우선순위가 더 높다면 기부
+		if (holder->priority < now_thread->priority)
+		{
+			holder->priority = now_thread->priority;
+		}
+		now_thread = holder;
+		depth++;
 	}
-	
 }
+// void donate_priority()
+// {
+// 	struct thread *current_thread = thread_current();
+// 	int nested_depth = 8; // 기부의 최대 깊이
+// 	int cnt = 0;
+
+// 	while (current_thread->wait_on_lock != NULL && cnt < nested_depth)
+// 	{
+// 		struct thread *holder = current_thread->wait_on_lock->holder;
+
+// 		// 기부받는 스레드의 우선순위를 업데이트
+// 		if (holder->priority < current_thread->priority)
+// 		{
+// 			holder->priority = current_thread->priority;
+// 		}
+
+// 		// 다음 스레드로 이동 (현재 락을 보유한 스레드)
+// 		current_thread = holder;
+// 		cnt++;
+// 	}
+// }
 
 void remove_with_lock(struct lock *lock)
 {
@@ -742,31 +773,30 @@ void remove_with_lock(struct lock *lock)
 	struct list_elem *e;
 	for (e = list_begin(&now_thread->donations); e != list_end(&now_thread->donations); e = list_next(e))
 	{
-		struct thread *th = list_entry(e, struct thread, elem);
-		if (th->wait_on_lock != lock)
+		struct thread *th = list_entry(e, struct thread, donation_elem);
+		if (th->wait_on_lock == lock)
 		{
-			continue;
+			list_remove(&th->donation_elem);
 		}
-		else
-		{
-			list_remove(e);
-			break;
-		}
-	}	
+	}
 }
-
-void refresh_priority(void)
+void refresh_priority()
 {
-	struct thread *now_thread = thread_current();
-	now_thread->priority = now_thread->init_priority;
-	if (!list_empty(&now_thread->donations))	
+	struct thread *current_thread = thread_current();
+
+	// 1. 원래의 우선순위로 초기화
+	current_thread->priority = current_thread->init_priority;
+
+	// 2. 기부받은 우선순위가 있는 경우 가장 높은 우선순위로 갱신
+	if (!list_empty(&current_thread->donations))
 	{
-		int max_priority = list_entry(list_front(&now_thread->donations), struct thread, elem)->priority;
-		if (now_thread->priority < max_priority)
-		{		
-			now_thread->priority = max_priority;
+		list_sort(&current_thread->donations, donate_high_priority, NULL);
+		struct thread *highest_donor = list_entry(list_front(&current_thread->donations), struct thread, donation_elem);
+		if (current_thread->priority < highest_donor->priority)
+		{
+			current_thread->priority = highest_donor->priority;
 		}
-	}	
+	}
 }
 
 /* 새 스레드에 사용할 tid를 반환합니다. */
