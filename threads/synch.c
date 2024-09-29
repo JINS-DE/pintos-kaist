@@ -112,6 +112,7 @@ void sema_up(struct semaphore *sema)
 	old_level = intr_disable();
 	if (!list_empty(&sema->waiters))
 	{
+		list_sort(&sema->waiters, better_priority, NULL);
 		next_thread = list_entry(list_pop_front(&sema->waiters), struct thread, elem);
 		thread_unblock(next_thread);
 		// 이 위치에 새 코드를 넣었을 땐 터졌었음
@@ -203,7 +204,7 @@ void lock_acquire(struct lock *lock)
 	if (lock->holder)
 	{
 		now_thread->wait_on_lock = lock;
-		now_thread->init_priority = now_thread->priority;
+		// now_thread->init_priority = now_thread->priority;
 		list_insert_ordered(&lock->holder->donations, &now_thread->donation_elem, donate_high_priority, NULL);
 		donate_priority();
 	}
