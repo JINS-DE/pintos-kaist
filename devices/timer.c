@@ -141,7 +141,7 @@ void timer_sleep(int64_t ticks)
 	// while (timer_elapsed(start) < ticks)
 	// 	thread_yield();
 
-	thread_sleep(start + ticks); // 추가된 부분
+	thread_sleep(start + ticks);
 }
 
 /* 약 MS 밀리초 동안 실행을 중단합니다. */
