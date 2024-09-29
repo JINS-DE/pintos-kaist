@@ -113,7 +113,7 @@ void thread_init(void)
 	lock_init(&tid_lock);
 	// 실행 준비가 된 스레드들을 저장할 준비 리스트를 초기화
 	list_init(&ready_list);
-	// 잠잘 준비가 된 스레드들을 저장할 수면 리스트를 초기화 // 이거 추가
+	// 잠잘 준비가 된 스레드들을 저장할 수면 리스트를 초기화
 	list_init(&sleep_list);
 	// 파괴 요청이 들어온 스레드들을 저장할 리스트를 초기화
 	list_init(&destruction_req);
@@ -271,8 +271,6 @@ void thread_block(void)
 	thread_current()->status = THREAD_BLOCKED; // 3. 현재 스레드의 상태를 BLOCKED로 변경
 	schedule();								   // 4. 스케줄러를 호출하여 다음 스레드를 실행
 }
-
-// 인터럽트 off 해주는 이유 -> 현재 작업중인 쓰레드가 바뀌지 않도록 ...?
 
 bool less_wake_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
