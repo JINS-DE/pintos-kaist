@@ -251,13 +251,6 @@ struct semaphore_elem {
 	struct semaphore semaphore;         /* This semaphore. */
 };
 
-// bool better_priority_sem(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-// {
-// 	const struct thread *t_a = list_entry(a, struct thread, elem);
-// 	const struct thread *t_b = list_entry(b, struct thread, elem);
-// 	return t_a->priority > t_b->priority;
-// }
-
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
    code to receive the signal and act upon it. */
