@@ -418,6 +418,9 @@ void thread_set_priority(int new_priority)
 	// list_entry(list_front(&sleep_list), struct thread, elem)->wake_ticks
 	thread_current()->priority = new_priority;
 	check_priority_threads(new_priority);
+
+	refresh_priority();
+	donate_priority();
 }
 
 void check_priority_threads(int priority)
@@ -542,6 +545,8 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	list_init(&t->donations);
 }
 
 /* 스케줄링될 다음 스레드를 선택하고 반환합니다.
@@ -712,6 +717,56 @@ schedule(void)
 		/* 스레드를 전환하기 전에, 현재 실행 중인 정보를 저장합니다. */
 		thread_launch(next); // 새로운 스레드 실행
 	}
+}
+
+void donate_priority()
+{
+	struct thread *now_thread = thread_current();
+	int max_priority = now_thread->priority;
+	int nested_depth = 8;
+
+	int cnt = 0;
+	while (cnt < 8 || now_thread->wait_on_lock != NULL)
+	{
+		now_thread = now_thread->wait_on_lock->holder;
+		now_thread->init_priority = now_thread->priority;
+		now_thread->priority = max_priority;
+		cnt++;
+	}
+	
+}
+
+void remove_with_lock(struct lock *lock)
+{
+	struct thread *now_thread = thread_current();
+	struct list_elem *e;
+	for (e = list_begin(&now_thread->donations); e != list_end(&now_thread->donations); e = list_next(e))
+	{
+		struct thread *th = list_entry(e, struct thread, elem);
+		if (th->wait_on_lock != lock)
+		{
+			continue;
+		}
+		else
+		{
+			list_remove(e);
+			break;
+		}
+	}	
+}
+
+void refresh_priority(void)
+{
+	struct thread *now_thread = thread_current();
+	now_thread->priority = now_thread->init_priority;
+	if (!list_empty(&now_thread->donations))	
+	{
+		int max_priority = list_entry(list_front(&now_thread->donations), struct thread, elem)->priority;
+		if (now_thread->priority < max_priority)
+		{		
+			now_thread->priority = max_priority;
+		}
+	}	
 }
 
 /* 새 스레드에 사용할 tid를 반환합니다. */

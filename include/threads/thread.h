@@ -92,6 +92,10 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 	int64_t wake_ticks;
+	int init_priority;				/* Priority.-original [kim] */
+	struct lock *wait_on_lock;
+	struct list donations;
+	struct list_elem donation_elem;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -149,4 +153,8 @@ void check_thread_tick(int64_t);
 
 bool less_wake_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool better_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);
+void refresh_priority(void);
 #endif /* threads/thread.h */
