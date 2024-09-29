@@ -147,4 +147,6 @@ void do_iret (struct intr_frame *tf);
 void thread_sleep(int64_t);
 void check_thread_tick(int64_t);
 
+bool less_wake_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool better_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 #endif /* threads/thread.h */

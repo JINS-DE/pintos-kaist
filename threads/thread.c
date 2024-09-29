@@ -242,6 +242,14 @@ tid_t thread_create(const char *name, int priority,
 
 	check_priority_threads(thread_get_priority());
 
+	struct thread *t_cur = thread_current();
+
+	if (t_cur->priority < priority) {
+		// enum intr_level old_level = intr_disable();
+		thread_yield();
+		// intr_set_level(old_level);
+	}
+
 	return tid;
 }
 void set_priority_thread(void)
@@ -281,11 +289,12 @@ bool better_priority(const struct list_elem *a, const struct list_elem *b, void 
 void thread_sleep(int64_t ticks)
 {
 	struct thread *th = thread_current();
-	th->wake_ticks = ticks;
-	enum intr_level old_level = intr_disable();
-	list_insert_ordered(&sleep_list, &th->elem, less_wake_ticks, NULL);
-	thread_block();
-	intr_set_level(old_level);
+	th->wake_ticks = ticks; // ticks에 도달하면 깨우도록, 깨워야 하는 시점을 저장한다.
+
+	enum intr_level old_level = intr_disable(); // 인터럽트 비활성화
+	list_insert_ordered(&sleep_list, &th->elem, less_wake_ticks, NULL); // sleep list에 넣기 (ticks순 오름차순)
+	thread_block(); // 현재 쓰레드를 waiter 리스트에 넣기
+	intr_set_level(old_level); // 인터럽트 활성화
 }
 
 void check_thread_tick(int64_t ticks)
