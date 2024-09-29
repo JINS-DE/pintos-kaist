@@ -65,8 +65,9 @@ sema_down (struct semaphore *sema) {
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
-	while (sema->value == 0) {
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+	while (sema->value == 0) { // while문이므로, sema value 0인 동안 대기
+		// list_push_back (&sema->waiters, &thread_current ()->elem);
+		list_insert_ordered(&sema->waiters, &thread_current ()->elem, better_priority, NULL);
 		thread_block ();
 	}
 	sema->value--;
@@ -102,18 +103,41 @@ sema_try_down (struct semaphore *sema) {
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
+// void
+// sema_up (struct semaphore *sema) {
+// 	enum intr_level old_level;
+
+// 	ASSERT (sema != NULL);
+
+// 	old_level = intr_disable ();
+// 	if (!list_empty (&sema->waiters))
+// 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
+// 					struct thread, elem));
+// 	sema->value++;
+// 	intr_set_level (old_level);
+// }
+
 void
 sema_up (struct semaphore *sema) {
 	enum intr_level old_level;
 
 	ASSERT (sema != NULL);
-
-	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
-		thread_unblock (list_entry (list_pop_front (&sema->waiters),
-					struct thread, elem));
+	struct thread *next_thread;
+    old_level = intr_disable();
+    if (!list_empty(&sema->waiters)) {
+        next_thread = list_entry(list_pop_front(&sema->waiters), struct thread, elem);
+        thread_unblock(next_thread);
+		// 이 위치에 새 코드를 넣었을 땐 터졌었음
+    }
+		
 	sema->value++;
 	intr_set_level (old_level);
+
+	// 인터럽트 컨텍스트가 아닐때 실행되어야 한다 (즉 일반 스레드 실행 컨텍스트에서 실행하여야 한다.)
+	// if (!intr_context() && next_thread != NULL && next_thread->priority > thread_current()->priority) { // 위 이유로 !intr_context()가 추가되었는데 없어도 돌아는 간다.
+	if (next_thread != NULL && next_thread->priority > thread_current()->priority) {
+        thread_yield();
+    }
 }
 
 static void sema_test_helper (void *sema_);
@@ -242,6 +266,13 @@ struct semaphore_elem {
 	struct semaphore semaphore;         /* This semaphore. */
 };
 
+// bool better_priority_sem(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+// {
+// 	const struct thread *t_a = list_entry(a, struct thread, elem);
+// 	const struct thread *t_b = list_entry(b, struct thread, elem);
+// 	return t_a->priority > t_b->priority;
+// }
+
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
    code to receive the signal and act upon it. */
@@ -288,6 +319,16 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	lock_acquire (lock);
 }
 
+bool better_sema(const struct semaphore_elem *a, const struct semaphore_elem *b, void *aux UNUSED) {
+    return get_sema_prior(a) > get_sema_prior(b);
+}
+
+int get_sema_prior(const struct semaphore_elem *sema){
+    if(list_empty(&sema->semaphore.waiters))
+        return 0;
+    return list_entry(list_front(&sema->semaphore.waiters), struct thread, elem)->priority;
+}
+
 /* If any threads are waiting on COND (protected by LOCK), then
    this function signals one of them to wake up from its wait.
    LOCK must be held before calling this function.
@@ -303,8 +344,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters))
-		sema_up (&list_entry (list_pop_front (&cond->waiters),
-					struct semaphore_elem, elem)->semaphore);
+
+		list_sort (&cond->waiters, better_sema, NULL);
+		sema_up (&list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem)->semaphore);
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by

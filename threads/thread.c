@@ -113,7 +113,7 @@ void thread_init(void)
 	lock_init(&tid_lock);
 	// 실행 준비가 된 스레드들을 저장할 준비 리스트를 초기화
 	list_init(&ready_list);
-	// 잠잘 준비가 된 스레드들을 저장할 수면 리스트를 초기화
+	// 잠잘 준비가 된 스레드들을 저장할 수면 리스트를 초기화 // 이거 추가
 	list_init(&sleep_list);
 	// 파괴 요청이 들어온 스레드들을 저장할 리스트를 초기화
 	list_init(&destruction_req);
@@ -239,6 +239,14 @@ tid_t thread_create(const char *name, int priority,
 	// THREAD_READY 상태로 설정하고 실행 큐에 추가
 	thread_unblock(t);
 
+	struct thread *t_cur = thread_current();
+
+	if (t_cur->priority < priority) {
+		// enum intr_level old_level = intr_disable();
+		thread_yield();
+		// intr_set_level(old_level);
+	}
+
 	return tid;
 }
 
@@ -255,6 +263,8 @@ void thread_block(void)
 	schedule();								   // 4. 스케줄러를 호출하여 다음 스레드를 실행
 }
 
+// 인터럽트 off 해주는 이유 -> 현재 작업중인 쓰레드가 바뀌지 않도록 ...?
+
 bool less_wake_ticks(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
 	const struct thread *t_a = list_entry(a, struct thread, elem);
@@ -262,7 +272,7 @@ bool less_wake_ticks(const struct list_elem *a, const struct list_elem *b, void 
 	return t_a->wake_ticks < t_b->wake_ticks;
 }
 
-bool batter_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+bool better_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
 	const struct thread *t_a = list_entry(a, struct thread, elem);
 	const struct thread *t_b = list_entry(b, struct thread, elem);
@@ -272,11 +282,12 @@ bool batter_priority(const struct list_elem *a, const struct list_elem *b, void 
 void thread_sleep(int64_t ticks)
 {
 	struct thread *th = thread_current();
-	th->wake_ticks = ticks;
-	enum intr_level old_level = intr_disable();
-	list_insert_ordered(&sleep_list, &th->elem, less_wake_ticks, NULL);
-	thread_block();
-	intr_set_level(old_level);
+	th->wake_ticks = ticks; // ticks에 도달하면 깨우도록, 깨워야 하는 시점을 저장한다.
+
+	enum intr_level old_level = intr_disable(); // 인터럽트 비활성화
+	list_insert_ordered(&sleep_list, &th->elem, less_wake_ticks, NULL); // sleep list에 넣기 (ticks순 오름차순)
+	thread_block(); // 현재 쓰레드를 waiter 리스트에 넣기
+	intr_set_level(old_level); // 인터럽트 활성화
 }
 
 void check_thread_tick(int64_t ticks)
@@ -284,16 +295,16 @@ void check_thread_tick(int64_t ticks)
 	struct list_elem *e;
 	struct thread *t;
 
-	for (e = list_begin(&sleep_list); e != list_end(&sleep_list); e = list_next(e))
+	for (e = list_begin(&sleep_list); e != list_end(&sleep_list); e = list_next(e)) // 전체 sleep_list 탐색
 	{
 		t = list_entry(e, struct thread, elem);
-		if (t->wake_ticks <= ticks)
+		if (t->wake_ticks <= ticks) // 깨워야 하는 쓰레드가 있으면 :
 		{
 			struct list_elem *temp;
-			temp = list_prev(e);
-			list_remove(e);
-			e = temp;
-			thread_unblock(t);
+			temp = list_prev(e); // 지우기 전 쓰레드를 임시변수에 저장
+			list_remove(e); // 쓰레드를 sleep_list에서 삭제 (실제 쓰레드가 삭제되는건 아님)
+			e = temp; // 얘를 통해서 위의 반복문에서 다음 요소를 찾음
+			thread_unblock(t); // 쓰레드를 대기상태로 전환
 		}
 		else
 		{
@@ -323,7 +334,7 @@ void thread_unblock(struct thread *t)
 	ASSERT(t->status == THREAD_BLOCKED);
 
 	// 4. 준비 리스트에 스레드를 추가합니다.
-	list_insert_ordered(&ready_list, &t->elem, batter_priority, NULL);
+	list_insert_ordered(&ready_list, &t->elem, better_priority, NULL); // 이 부분 수정. ready list 에 담을 때 priority에 따라 오름차순 정렬
 
 	// 5. 스레드를 THREAD_READY 상태로 전환합니다.
 	t->status = THREAD_READY;
@@ -398,7 +409,7 @@ void thread_yield(void)
 	// 유휴 스레드가 아니면
 	if (curr != idle_thread)
 		// ready 리스트에 집어넣기
-		list_insert_ordered(&ready_list, &curr->elem, batter_priority, NULL);
+		list_insert_ordered(&ready_list, &curr->elem, better_priority, NULL);
 	// 스케쥴러 동작
 	do_schedule(THREAD_READY);
 	intr_set_level(old_level);
@@ -407,7 +418,16 @@ void thread_yield(void)
 /* 현재 스레드의 우선 순위를 NEW_PRIORITY로 설정합니다. */
 void thread_set_priority(int new_priority)
 {
+	struct thread *t_next;
 	thread_current()->priority = new_priority;
+
+	if (!list_empty(&ready_list)) {
+		t_next = list_entry(list_begin(&ready_list), struct thread, elem);
+		if (t_next->priority > new_priority) {
+			thread_yield();
+		}
+
+	}
 }
 
 /* 현재 스레드의 우선 순위를 반환합니다. */
