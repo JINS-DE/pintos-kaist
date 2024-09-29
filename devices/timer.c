@@ -175,7 +175,7 @@ timer_interrupt(struct intr_frame *args UNUSED)
 	// 인터럽트를 실행했으니 틱 증가
 
 	ticks++; // 시스템이 시작된 이후 경과한 타이머 틱 수를 증가시킴
-	check_thread_tick(ticks); // 추가된 부분
+	check_thread_tick(ticks);
 	thread_tick(); // 스레드 관련 타이머 기능을 처리 // 스레드 틱도 증가시킴
 }
 
