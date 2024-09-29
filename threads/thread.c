@@ -238,6 +238,9 @@ tid_t thread_create(const char *name, int priority,
 	// 스레드를 실행 준비 상태로 만든다.
 	// THREAD_READY 상태로 설정하고 실행 큐에 추가
 	thread_unblock(t);
+	// 현재 실행중인 스레드를 ready
+
+	check_priority_threads(thread_get_priority());
 
 	struct thread *t_cur = thread_current();
 
@@ -249,7 +252,13 @@ tid_t thread_create(const char *name, int priority,
 
 	return tid;
 }
-
+void set_priority_thread(void)
+{
+	ASSERT(!intr_context());				   // 1. 확인: 인터럽트 컨텍스트에서 호출되지 않았는지 검사
+	ASSERT(intr_get_level() == INTR_OFF);	   // 2. 확인: 인터럽트가 비활성화된 상태인지 확인
+	thread_current()->status = THREAD_BLOCKED; // 3. 현재 스레드의 상태를 BLOCKED로 변경
+	schedule();								   // 4. 스케줄러를 호출하여 다음 스레드를 실행
+}
 /* 현재 스레드를 잠자게 합니다. thread_unblock()에 의해 깨어날 때까지
    다시 스케줄링되지 않습니다.
 
@@ -295,21 +304,11 @@ void check_thread_tick(int64_t ticks)
 	struct list_elem *e;
 	struct thread *t;
 
-	for (e = list_begin(&sleep_list); e != list_end(&sleep_list); e = list_next(e)) // 전체 sleep_list 탐색
+	while (!list_empty(&sleep_list) && list_entry(list_front(&sleep_list), struct thread, elem)->wake_ticks <= ticks)
 	{
-		t = list_entry(e, struct thread, elem);
-		if (t->wake_ticks <= ticks) // 깨워야 하는 쓰레드가 있으면 :
-		{
-			struct list_elem *temp;
-			temp = list_prev(e); // 지우기 전 쓰레드를 임시변수에 저장
-			list_remove(e); // 쓰레드를 sleep_list에서 삭제 (실제 쓰레드가 삭제되는건 아님)
-			e = temp; // 얘를 통해서 위의 반복문에서 다음 요소를 찾음
-			thread_unblock(t); // 쓰레드를 대기상태로 전환
-		}
-		else
-		{
-			break;
-		}
+		struct thread *awake_thread = list_entry(list_pop_front(&sleep_list), struct thread, elem);
+
+		thread_unblock(awake_thread);
 	}
 }
 
@@ -334,7 +333,7 @@ void thread_unblock(struct thread *t)
 	ASSERT(t->status == THREAD_BLOCKED);
 
 	// 4. 준비 리스트에 스레드를 추가합니다.
-	list_insert_ordered(&ready_list, &t->elem, better_priority, NULL); // 이 부분 수정. ready list 에 담을 때 priority에 따라 오름차순 정렬
+	list_insert_ordered(&ready_list, &t->elem, better_priority, NULL);
 
 	// 5. 스레드를 THREAD_READY 상태로 전환합니다.
 	t->status = THREAD_READY;
@@ -418,15 +417,20 @@ void thread_yield(void)
 /* 현재 스레드의 우선 순위를 NEW_PRIORITY로 설정합니다. */
 void thread_set_priority(int new_priority)
 {
-	struct thread *t_next;
+	// list_entry(list_front(&sleep_list), struct thread, elem)->wake_ticks
 	thread_current()->priority = new_priority;
+	check_priority_threads(new_priority);
+}
 
-	if (!list_empty(&ready_list)) {
-		t_next = list_entry(list_begin(&ready_list), struct thread, elem);
-		if (t_next->priority > new_priority) {
-			thread_yield();
-		}
-
+void check_priority_threads(int priority)
+{
+	if (list_empty(&ready_list))
+	{
+		return;
+	}
+	if (priority < list_entry(list_front(&ready_list), struct thread, elem)->priority)
+	{
+		thread_yield();
 	}
 }
 
