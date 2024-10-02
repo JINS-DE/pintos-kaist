@@ -441,6 +441,11 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
+	while ((uintptr_t)if_->rsp % 8 != 0)
+	{
+		if_->rsp = if_->rsp - 1;
+		*(uint8_t *)if_->rsp = 0;
+	}
 
 	printf("load 5!!!\n");
 
@@ -482,13 +487,12 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	hex_dump((uintptr_t)if_->rsp, (void *)if_->rsp, USER_STACK - (uintptr_t)if_->rsp, true);
 	success = true;
-
 done:
-	/* We arrive here whether the load is successful or not. */
-	file_close (file);
-	return success;
+    /* We arrive here whether the load is successful or not. */
+    file_close (file);
+	hex_dump((uintptr_t)if_->rsp, (void *)if_->rsp, USER_STACK - (uintptr_t)if_->rsp, true);
+    return success;
 }
-
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
