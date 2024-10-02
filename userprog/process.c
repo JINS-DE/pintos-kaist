@@ -453,14 +453,34 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	printf("before TODO!!!\n");
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-
-	for(int i=argc-1; i > -1; i--) {
-		int arg_size = sizeof(argv[i]);
-		if_rsp -= 
+    /* TODO: Your code goes here.
+     * TODO: Implement argument passing (see project2/argument_passing.html). */
+	for (int i = argc - 1; i > -1; i--)
+	{
+		for (int j = strlen(argv[i]); j > -1; j--)
+		{
+			if_->rsp = if_->rsp - 1;
+			*(char *)if_->rsp = argv[i][j];
+		}
+	}
+	while ((uintptr_t)if_->rsp % 8 != 0)
+	{
+		if_->rsp = if_->rsp - 1;
+		*(uint8_t *)if_->rsp = 0;
 	}
 
+	if_->rsp = if_->rsp - sizeof(char *);	
+	*(char **)if_->rsp = 0;
+
+	for (int i = argc - 1; i > -1; i--)
+	{
+		if_->rsp = if_->rsp - sizeof(char *);
+		*(char **)if_->rsp = argv[i];
+	}
+	if_->rsp = if_->rsp - 1;
+	*(char **)if_->rsp = 0;
+
+	hex_dump((uintptr_t)if_->rsp, (void *)if_->rsp, USER_STACK - (uintptr_t)if_->rsp, true);
 	success = true;
 
 done:
