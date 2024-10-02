@@ -338,9 +338,13 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
+/* Loads an ELF executable from FILE_NAME into the current thread.
+ * Stores the executable's entry point into *RIP
+ * and its initial stack pointer into *RSP.
+ * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
-	printf("load start!!!\n");
+	//printf("load start!!!\n");
 	struct thread *t = thread_current ();
 	struct ELF ehdr; // ELF 헤더 정보
 	struct file *file = NULL; // 파일 시스템에서 열려 있는 파일을 가리키는 포인터
@@ -355,14 +359,14 @@ load (const char *file_name, struct intr_frame *if_) {
 		argc++;
 	}
 
-	printf("load 1!!!\n");
+	//printf("load 1!!!\n");
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create (); // 페이지 테이블을 만든다.
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ()); // 페이지 테이블을 활성화한다. 현재 스레드를 위한 메모리 매핑을 설정했다.
 
-	printf("load 2!!!\n");
+	//printf("load 2!!!\n");
 
 	/* Open executable file. */
 	file = filesys_open (argv[0]); // 현재 파일 이름으로 실행 파일을 연다.
@@ -371,7 +375,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
-	printf("load 3!!!\n");
+	//printf("load 3!!!\n");
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr // ELF 헤더를 읽고, 그 크기와 내용을 검증한다.
@@ -385,7 +389,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
-	printf("load 4!!!\n");
+	//printf("load 4!!!\n");
 
 	/* Read program headers. */
 	// 프로그램 헤더를 읽고 각각의 세그먼트를 처리한다.
@@ -441,13 +445,8 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-	while ((uintptr_t)if_->rsp % 8 != 0)
-	{
-		if_->rsp = if_->rsp - 1;
-		*(uint8_t *)if_->rsp = 0;
-	}
 
-	printf("load 5!!!\n");
+	//printf("load 5!!!\n");
 
 	/* Set up stack. */
 	if (!setup_stack (if_)) // 스택 설정
@@ -456,42 +455,73 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Start address. */
 	if_->rip = ehdr.e_entry; // 시작주소 설정
 
-	printf("before TODO!!!\n");
+	//printf("before TODO!!!\n");
 
     /* TODO: Your code goes here.
      * TODO: Implement argument passing (see project2/argument_passing.html). */
-	for (int i = argc - 1; i > -1; i--)
-	{
-		for (int j = strlen(argv[i]); j > -1; j--)
-		{
-			if_->rsp = if_->rsp - 1;
+	// for (int i = argc - 1; i > -1; i--)
+	// {
+	// 	for (int j = strlen(argv[i]); j > -1; j--)
+	// 	{
+	// 		if_->rsp = if_->rsp - 1;
+	// 		*(char *)if_->rsp = argv[i][j];
+	// 	}
+	// }
+	// while ((uintptr_t)if_->rsp % 8 != 0)
+	// {
+	// 	if_->rsp = if_->rsp - 1;
+	// 	*(uint8_t *)if_->rsp = 0;
+	// }
+
+	// if_->rsp = if_->rsp - sizeof(char *);	
+	// *(char **)if_->rsp = 0;
+
+	// for (int i = argc - 1; i > -1; i--)
+	// {
+	// 	if_->rsp = if_->rsp - sizeof(char *);
+	// 	*(char **)if_->rsp = argv[i];
+	// }
+	// if_->rsp = if_->rsp - 1;
+	// *(char **)if_->rsp = 0;
+
+	// 인자들을 스택에 저장하고, 각 인자의 주소를 저장할 포인터 배열의 위치를 확보
+	char *argv_addr[10]; // 스택에서 각 인자의 주소를 저장하기 위한 배열
+	for (int i = argc - 1; i >= 0; i--) {
+		for (int j = strlen(argv[i]); j >= 0; j--) { // NULL 문자까지 복사
+			if_->rsp--;
 			*(char *)if_->rsp = argv[i][j];
 		}
+		argv_addr[i] = (char *)if_->rsp; // 스택에 저장된 각 인자의 주소를 저장
 	}
-	while ((uintptr_t)if_->rsp % 8 != 0)
-	{
-		if_->rsp = if_->rsp - 1;
+
+	// 8바이트 정렬: 스택 포인터를 8바이트 단위로 정렬
+	while (if_->rsp % 8 != 0) {
+		if_->rsp--;
 		*(uint8_t *)if_->rsp = 0;
 	}
 
-	if_->rsp = if_->rsp - sizeof(char *);	
-	*(char **)if_->rsp = 0;
+	// NULL 포인터 저장 (argv[argc] == NULL)
+	if_->rsp -= sizeof(char *);
+	*(char **)if_->rsp = NULL;
 
-	for (int i = argc - 1; i > -1; i--)
-	{
-		if_->rsp = if_->rsp - sizeof(char *);
-		*(char **)if_->rsp = argv[i];
+	// 각 인자의 주소를 역순으로 스택에 저장
+	for (int i = argc - 1; i >= 0; i--) {
+		if_->rsp -= sizeof(char *);
+		*(char **)if_->rsp = argv_addr[i]; // 스택에 저장된 인자의 주소를 저장
 	}
-	if_->rsp = if_->rsp - 1;
-	*(char **)if_->rsp = 0;
+
+	// Return address를 0으로 설정
+	if_->rsp -= sizeof(void *);
+	*(void **)if_->rsp = 0; // return address를 0으로 설정
+
 
 	hex_dump((uintptr_t)if_->rsp, (void *)if_->rsp, USER_STACK - (uintptr_t)if_->rsp, true);
 	success = true;
+
 done:
-    /* We arrive here whether the load is successful or not. */
-    file_close (file);
-	hex_dump((uintptr_t)if_->rsp, (void *)if_->rsp, USER_STACK - (uintptr_t)if_->rsp, true);
-    return success;
+	/* We arrive here whether the load is successful or not. */
+	file_close (file);
+	return success;
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
