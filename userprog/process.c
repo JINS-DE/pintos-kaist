@@ -63,7 +63,6 @@ initd (void *f_name) {
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
-
 	process_init ();
 
 	if (process_exec (f_name) < 0)
@@ -168,15 +167,23 @@ process_exec (void *f_name) {
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
-	struct intr_frame _if;
-	_if.ds = _if.es = _if.ss = SEL_UDSEG;
-	_if.cs = SEL_UCSEG;
-	_if.eflags = FLAG_IF | FLAG_MBS;
+	
+	// intr_frame을 초기화한다.
+	// 인터럽트 프레임 : CPU의 상태를 저장하는 구조체로 인터럽트가 발생했을 때, 새로운 프로세스를 시작할 때 사용
+	struct intr_frame _if; 
+	_if.ds = _if.es = _if.ss = SEL_UDSEG;// 데이터 세그먼트(ds), 엑스트라 세그먼트(es) 스택 세그먼트(ss)를 사용자 데이터 세그먼트로 설정 
+	_if.cs = SEL_UCSEG; // 코드 세그먼트(cs)를 사용자 코드 세그먼트로 설정
+	_if.eflags = FLAG_IF | FLAG_MBS; // 인터럽트를 활성화 하는 플래그(FLAG_IF), 필수 플래그(FLAG_MBS) 설정
 
 	/* We first kill the current context */
+	// 현재 실행 중 프로세스의 주소공간 & 관련 자원들을 정리한다.
+	// 현재 프로세스가 사용 중인 메모리 등을 해제한다.
 	process_cleanup ();
 
 	/* And then load the binary */
+	// file_name을 메모리에 로드한다.
+	// _if에 필요한 정보를 저장한다.
+	// 성공시 true를 반환한다.
 	success = load (file_name, &_if);
 
 	/* If load failed, quit. */
@@ -185,8 +192,12 @@ process_exec (void *f_name) {
 		return -1;
 
 	/* Start switched process. */
-	do_iret (&_if);
-	NOT_REACHED ();
+	// 새 프로세스를 시작한다.
+	// 인터럽트 리턴을 통해, 저장된 _if를 사용해 CPU 상태를 복구한다.
+	// 사용자 모드에서 새 프로그램의 실행을 시작한다.
+	// 이 함수가 호출되면, 현재 스레드는 새 프로그램을 실행하는 상태로 전환된다.
+	do_iret (&_if); 
+	NOT_REACHED (); // 이 코드는 도달하면 안된다...!
 }
 
 
@@ -204,6 +215,13 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	printf("process wait start !!!");
+	for(int i=0; i < 100000000; i++) {
+
+	}
+	// while(true) {
+
+	// }
 	return -1;
 }
 
@@ -322,39 +340,56 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
+	printf("load start!!!\n");
 	struct thread *t = thread_current ();
-	struct ELF ehdr;
-	struct file *file = NULL;
-	off_t file_ofs;
-	bool success = false;
+	struct ELF ehdr; // ELF 헤더 정보
+	struct file *file = NULL; // 파일 시스템에서 열려 있는 파일을 가리키는 포인터
+	off_t file_ofs; // 파일의 오프셋을 저장하는 변수로, 파일에서 프로그램 헤더를 읽을 때 사용
+	bool success = false; // 로드 성공 여부
 	int i;
 
+	char *argv[10], *token, *save_ptr;
+	int argc=0;
+	for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
+		argv[argc] = token;
+		argc++;
+	}
+
+	printf("load 1!!!\n");
 	/* Allocate and activate page directory. */
-	t->pml4 = pml4_create ();
+	t->pml4 = pml4_create (); // 페이지 테이블을 만든다.
 	if (t->pml4 == NULL)
 		goto done;
-	process_activate (thread_current ());
+	process_activate (thread_current ()); // 페이지 테이블을 활성화한다. 현재 스레드를 위한 메모리 매핑을 설정했다.
+
+	printf("load 2!!!\n");
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (argv[0]); // 현재 파일 이름으로 실행 파일을 연다.
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
+	printf("load 3!!!\n");
+
 	/* Read and verify executable header. */
-	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
-			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
-			|| ehdr.e_type != 2
-			|| ehdr.e_machine != 0x3E // amd64
-			|| ehdr.e_version != 1
-			|| ehdr.e_phentsize != sizeof (struct Phdr)
-			|| ehdr.e_phnum > 1024) {
+	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr // ELF 헤더를 읽고, 그 크기와 내용을 검증한다.
+			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7) // ELF 식별자를 확인하여 유효한 ELF 파일인지?
+			|| ehdr.e_type != 2 // 파일의 형식의 실행파일인지?
+			|| ehdr.e_machine != 0x3E // amd64 // 타겟 머신이 amd64인지?
+			|| ehdr.e_version != 1 // 버전은 언제나 1
+			|| ehdr.e_phentsize != sizeof (struct Phdr) // 프로그램 헤더 엔트리 크기가 올바른지?
+			|| ehdr.e_phnum > 1024) { // 프로그램 헤더 엔트리 개수가 올바른지?
 		printf ("load: %s: error loading executable\n", file_name);
 		goto done;
 	}
 
+	printf("load 4!!!\n");
+
 	/* Read program headers. */
+	// 프로그램 헤더를 읽고 각각의 세그먼트를 처리한다.
+
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct Phdr phdr;
@@ -378,8 +413,8 @@ load (const char *file_name, struct intr_frame *if_) {
 			case PT_INTERP:
 			case PT_SHLIB:
 				goto done;
-			case PT_LOAD:
-				if (validate_segment (&phdr, file)) {
+			case PT_LOAD: // PT_LOAD 유형의 세그먼트를 로드하고 메모리에 매핑한다.
+				if (validate_segment (&phdr, file)) { // validate_segment()를 통해 세그먼트가 유효한지 검증한 후, 파일에서 해당 세그먼트를 메모리로 읽어오거나 0으로 채운다.
 					bool writable = (phdr.p_flags & PF_W) != 0;
 					uint64_t file_page = phdr.p_offset & ~PGMASK;
 					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
@@ -407,15 +442,23 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
+	printf("load 5!!!\n");
+
 	/* Set up stack. */
-	if (!setup_stack (if_))
+	if (!setup_stack (if_)) // 스택 설정
 		goto done;
 
 	/* Start address. */
-	if_->rip = ehdr.e_entry;
+	if_->rip = ehdr.e_entry; // 시작주소 설정
+
+	printf("before TODO!!!\n");
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+
+	for(int i=argc-1;i > -1;i--) {
+		
+	}
 
 	success = true;
 

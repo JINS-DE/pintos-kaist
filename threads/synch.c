@@ -120,7 +120,7 @@ void sema_up(struct semaphore *sema)
 
 	sema->value++;
 
-	if (check_priority_threads())
+	if (!intr_context() && check_priority_threads()) // 인터럽트 컨텍스트가 아닐 때만 양보가 일어나도록 수정
 	{
 		thread_yield();
 	}
