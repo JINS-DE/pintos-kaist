@@ -456,8 +456,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
-	for(int i=argc-1;i > -1;i--) {
-		
+	for(int i=argc-1; i > -1; i--) {
+		int arg_size = sizeof(argv[i]);
+		if_rsp -= 
 	}
 
 	success = true;
