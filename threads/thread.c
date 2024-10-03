@@ -237,6 +237,22 @@ tid_t thread_create(const char *name, int priority,
 	// 인터럽트를 활성화하는 플래그
 	t->tf.eflags = FLAG_IF;
 
+	// 파일 디스크립터 초기화
+	t->next_fd = 2;
+
+	for(int i = 2; i < MAX_FD; i++) {
+		t->fdt[i] = NULL;
+	}
+	
+	// 동적 할당
+	// 쓰려면 구조체의 배열을 
+	// struct file **fdt;로 바꿔줄 것!
+	// t->fdt = calloc(MAX_FD, sizeof(struct file *)); // fdt 포인터 동적 할당
+    // if (t->fdt == NULL) {
+    //     palloc_free_page(t); // 메모리 해제
+    //     return TID_ERROR; // 할당 실패
+    // }
+
 	/* 실행 큐에 추가합니다. */
 	// 스레드를 실행 준비 상태로 만든다.
 	// THREAD_READY 상태로 설정하고 실행 큐에 추가
