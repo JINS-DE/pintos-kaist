@@ -234,6 +234,13 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
+	// 프로세스에 열린 모든 파일을 닫는다.
+	for (int i = curr->next_fd-1; i >= 2; i--) {
+		if (curr->fdt[i] != NULL) {
+			process_close_file(i);
+		}
+	}
+
 	process_cleanup ();
 }
 
@@ -459,30 +466,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
     /* TODO: Your code goes here.
      * TODO: Implement argument passing (see project2/argument_passing.html). */
-	// for (int i = argc - 1; i > -1; i--)
-	// {
-	// 	for (int j = strlen(argv[i]); j > -1; j--)
-	// 	{
-	// 		if_->rsp = if_->rsp - 1;
-	// 		*(char *)if_->rsp = argv[i][j];
-	// 	}
-	// }
-	// while ((uintptr_t)if_->rsp % 8 != 0)
-	// {
-	// 	if_->rsp = if_->rsp - 1;
-	// 	*(uint8_t *)if_->rsp = 0;
-	// }
-
-	// if_->rsp = if_->rsp - sizeof(char *);	
-	// *(char **)if_->rsp = 0;
-
-	// for (int i = argc - 1; i > -1; i--)
-	// {
-	// 	if_->rsp = if_->rsp - sizeof(char *);
-	// 	*(char **)if_->rsp = argv[i];
-	// }
-	// if_->rsp = if_->rsp - 1;
-	// *(char **)if_->rsp = 0;
 
 	// 인자들을 스택에 저장하고, 각 인자의 주소를 저장할 포인터 배열의 위치를 확보
 	char *argv_addr[10]; // 스택에서 각 인자의 주소를 저장하기 위한 배열
@@ -566,6 +549,41 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 
 	/* It's okay. */
 	return true;
+}
+
+int process_add_file (struct file *f) {
+	struct thread *cur_t = thread_current();
+	int ret_fd = cur_t->next_fd;
+	if(ret_fd == MAX_FD) {
+		return -1;
+	}
+
+	cur_t->fdt[ret_fd] = f;
+	cur_t->next_fd += 1;
+	
+	return ret_fd;
+}
+
+struct file *process_get_file(int fd) {
+	struct thread *cur_t = thread_current();
+
+	if ( cur_t->fdt[fd] != NULL ) {
+		return cur_t->fdt[fd];
+	} else {
+		return NULL;
+	}
+}
+
+void process_close_file(int fd) {
+	struct thread *cur_t = thread_current();
+	struct file *cur_file = process_get_file(fd);
+
+	if(cur_file == NULL){
+		return;
+	}
+	file_close(fd);
+
+	cur_t->fdt[fd] = NULL;
 }
 
 #ifndef VM
