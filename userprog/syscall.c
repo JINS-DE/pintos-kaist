@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
@@ -39,16 +40,74 @@ void syscall_init(void)
 
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
-{
-	// TODO: Your implementation goes here.
-	printf("system call!\n");
+{	
+	// 시스템 콜 번호를 %rax에서 가져옴
+    int syscall_number = f->R.rax;
+
+	/* 인자로 포인터가 넘어오는 경우는 커널 메모리 침범하지 않는지 검사해야하는듯...? */
+	/* 파일 조작의 경우 lock을 거는 것도 고려하여야 함*/
+    switch (syscall_number)
+    {
+		case SYS_HALT:
+			halt();
+			break;
+		case SYS_EXIT:
+			// exit(f->R.rdi);
+			break;
+		case SYS_FORK:
+			// fork()
+			break;
+		case SYS_EXEC:
+			// exec()
+			break;
+		case SYS_WAIT:
+			// wait()
+			break;
+		case SYS_CREATE:
+			// create()
+			break;
+		case SYS_REMOVE:
+			// remove();
+			break;
+		case SYS_OPEN:
+			// open()
+			break;
+		case SYS_FILESIZE:
+			// filesize()
+			break;
+		case SYS_READ:
+			// read()
+			break;
+		case SYS_WRITE:
+			// write()
+			break;
+		case SYS_SEEK:
+			// seek()
+			break;
+		case SYS_TELL:
+			// tell()
+			break;
+		case SYS_CLOSE:
+			// close()
+			break;
+		default:
+			//exit(-1);
+			break;	
+    }
+	/* 위 함수의 결과는 rax에 저장되어야 함 */
+	//f->R.rax = result;
 	thread_exit();
 }
 
-void check_address(void *addr)
+void halt(void)
 {
-	if (addr == NULL || !is_user_vaddr(addr))
-	{
-		exit(-1)
-	}
+    power_off();
 }
+
+// void check_address(void *addr)
+// {
+// 	if (addr == NULL || !is_user_vaddr(addr))
+// 	{
+// 		exit(-1);
+// 	}
+// }
