@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -22,13 +23,13 @@ enum thread_status
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) - 1) /* Error value for tid_t. */
-
+#define FDT_COUNT_LIMIT 128
 /* Thread priorities. */
 #define PRI_MIN 0	   /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
 
-#define MAX_FD 128	   /* fd 최댓값 */
+#define MAX_FD 128 /* fd 최댓값 */
 
 /* A kernel thread or user process.
  *
@@ -118,7 +119,26 @@ struct thread
 
 	/* Owned by thread.c. */
 	struct intr_frame tf; /* Information for switching */
-	unsigned magic;		  /* Detects stack overflow. */
+
+	// 자식 프로세스 생성시
+	// 부모 프로세스의 사용자 영역 스택을 물려줘야하는데
+	// 커널영역으로 들어가면 부모프로세스의 rdi가 커널영역 스택을 가리키기 때문에
+	// 사용자 영역 즉 sys_handler에 인자인 intr_frame을
+	// 자식 프로세스에게 넘겨줘야힘
+	struct intr_frame parent_if;
+	struct list child_list;
+	struct list_elem child_elem;
+	// 자식 프로세스가 생성되자마자
+	// _do_fork 가 호출되어 load가 진행됨
+	// 부모스레드는 load가 완료될때까지 기다려야함
+	// 세마포어 사용하자
+	struct semaphore load_sema;
+	struct semaphore exit_sema;
+	struct semaphore wait_sema;
+	unsigned magic; /* Detects stack overflow. */
+	int exit_status;
+
+	struct file *running; // 추가
 };
 
 /* If false (default), use round-robin scheduler.

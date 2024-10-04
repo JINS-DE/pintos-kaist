@@ -237,6 +237,8 @@ tid_t thread_create(const char *name, int priority,
 	// 인터럽트를 활성화하는 플래그
 	t->tf.eflags = FLAG_IF;
 
+	// 현재 스레드의 자식으로 추가한다.
+	list_push_back(&thread_current()->child_list, &t->child_elem);
 	// 파일 디스크립터 초기화
 	t->next_fd = 2;
 
@@ -567,9 +569,14 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	t->exit_status = 0;
 
 	t->init_priority = priority;
 	list_init(&t->donations);
+	list_init(&t->child_list);
+	sema_init(&t->load_sema, 0);
+	sema_init(&t->exit_sema, 0);
+	sema_init(&t->wait_sema, 0);
 }
 
 /* 스케줄링될 다음 스레드를 선택하고 반환합니다.
