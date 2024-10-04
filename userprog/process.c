@@ -50,7 +50,7 @@ process_create_initd (const char *file_name) {
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
-	
+
 	file_name = strtok_r(file_name, " ", &save_ptr);
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
@@ -177,7 +177,7 @@ process_exec (void *f_name) {
 	 * 그래서 새로운 `intr_frame` 구조체를 선언하여 여기에 상태 정보를 담습니다. */
 	struct intr_frame _if;  // 인터럽트 프레임: CPU 상태 정보 저장 (레지스터, 플래그 등)
 	
-	// 사용자 세그먼트 설정 (이 값들은 사용자 모드에서 실행되는 프로세스가 사용할 세그먼트)
+	// 사용자 세그먼트 설정 (이 값들은 사용자 모드에서 실행되는 프로세스가 사용할 세그먼트)d
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;  // 데이터 세그먼트 (사용자용)
 	
 	// 코드 세그먼트 설정 (사용자 모드에서 실행)
