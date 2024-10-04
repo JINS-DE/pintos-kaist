@@ -65,11 +65,6 @@ tid_t process_create_initd(const char *file_name)
 		return TID_ERROR;
 	strlcpy(fn_copy, file_name, PGSIZE);
 
-	// Argument Passing ~
-    char *save_ptr;
-    strtok_r(file_name, " ", &save_ptr);
-    // ~ Argument Passing
-
 	/* FILE_NAME을 실행하는 새로운 스레드를 생성합니다. */
 	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
@@ -249,8 +244,6 @@ int process_exec(void *f_name)
 	// 성공시 true를 반환한다.
 	success = load(file_name, &_if);
 
-	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
-
 	/* If load failed, quit. */
 	palloc_free_page(file_name);
 	if (!success)
@@ -261,7 +254,6 @@ int process_exec(void *f_name)
 	// 인터럽트 리턴을 통해, 저장된 _if를 사용해 CPU 상태를 복구한다.
 	// 사용자 모드에서 새 프로그램의 실행을 시작한다.
 	// 이 함수가 호출되면, 현재 스레드는 새 프로그램을 실행하는 상태로 전환된다.
-	// printf(" b4 call do_iret !!!");
 	do_iret(&_if);
 	NOT_REACHED(); // 이 코드는 도달하면 안된다...!
 }
@@ -277,11 +269,6 @@ int process_wait(tid_t child_tid UNUSED)
 {
 	/* XXX: 힌트) Pintos가 process_wait(initd)일 때 종료됩니다.
 	 * XXX: process_wait을 구현하기 전에 여기에 무한 루프를 추가하는 것을 추천합니다. */
-
-	// for (int i = 0; i < 1000000000; i++) {
-		
-	// }
-
 	struct thread *child = get_child_process(child_tid);
 	if (child == NULL)
 		return -1;
@@ -298,9 +285,9 @@ void process_exit(void)
 	struct thread *cur = thread_current();
 
 	// 1) FDT의 모든 파일을 닫고 메모리를 반환한다.
-	// for (int i = 2; i < FDT_COUNT_LIMIT; i++)
-	// 	close(i);
-	// palloc_free_page(cur->fdt);
+	for (int i = 2; i < FDT_COUNT_LIMIT; i++)
+		close(i);
+	palloc_free_page(cur->fdt);
 	// 프로세스에 열린 모든 파일을 닫는다.
 	for (int i = cur->next_fd - 1; i >= 2; i--)
 	{
@@ -429,7 +416,7 @@ load(const char *file_name, struct intr_frame *if_)
 	bool success = false;	  // 로드 성공 여부
 	int i;
 
-	char *argv[30], *token, *save_ptr;
+	char *argv[10], *token, *save_ptr;
 	int argc = 0;
 	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
 	{
@@ -570,9 +557,7 @@ load(const char *file_name, struct intr_frame *if_)
 	if_->rsp -= sizeof(void *);
 	*(void **)if_->rsp = 0; // return address를 0으로 설정
 
-	if_->R.rdi = argc;
-	if_->R.rsi = if_->rsp+8;
-
+	hex_dump((uintptr_t)if_->rsp, (void *)if_->rsp, USER_STACK - (uintptr_t)if_->rsp, true);
 	success = true;
 
 done:

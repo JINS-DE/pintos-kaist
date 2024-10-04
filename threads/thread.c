@@ -593,7 +593,7 @@ next_thread_to_run(void)
 /* iretq를 사용하여 스레드를 실행합니다. */
 // 스레드 복원
 void do_iret(struct intr_frame *tf)
-{	
+{
 	__asm __volatile(
 		"movq %0, %%rsp\n"
 		"movq 0(%%rsp),%%r15\n"
