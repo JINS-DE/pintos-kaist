@@ -11,6 +11,11 @@
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 void check_address(void *addr);
+void halt(void);
+void exit(int status);
+int fork(const char *thread_name, struct intr_frame *f);
+int wait(int pid);
+void close(int fd);
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -40,8 +45,61 @@ void syscall_init(void)
 /* The main system call interface */
 void syscall_handler(struct intr_frame *f UNUSED)
 {
+	// 시스템 콜 번호를 %rax에서 가져옴
+	int syscall_number = f->R.rax;
+
+	switch (syscall_number)
+	{
+	case SYS_FORK:
+		f->R.rax = fork(f->R.rdi, f);
+		break;
+	case SYS_HALT:
+		halt();
+		break;
+	case SYS_EXIT:
+		exit(f->R.rdi);
+		break;
+	case SYS_WAIT:
+		f->R.rax = wait(f->R.rdi);
+		break;
+	case SYS_EXEC:
+		// f->R.rax = exec(f->R.rdi); /* Switch current process. */
+		break;
+	case SYS_CLOSE:
+		int fd_close = (int)f->R.rdi;
+		break;
+	}
+
 	// TODO: Your implementation goes here.
+
 	printf("system call!\n");
+	thread_exit();
+}
+void close(int fd)
+{
+	process_close_file(fd);
+}
+int wait(int pid)
+{
+	return process_wait(pid);
+}
+int fork(const char *thread_name, struct intr_frame *f)
+{
+	return process_fork(thread_name, f);
+}
+void halt(void)
+{
+	power_off();
+}
+void exit(int status)
+{
+	/* 실행중인 스레드 구조체를 가져옴 */
+	struct thread *current = thread_current();
+	current->exit_status = status;
+	/* 프로세스 종료 메시지 출력,
+	출력 양식: “프로세스이름 : exit(종료상태 )” */
+	printf("%s: exit(%d)\n", current->name, status);
+	/* 스레드 종료 */
 	thread_exit();
 }
 
@@ -49,6 +107,6 @@ void check_address(void *addr)
 {
 	if (addr == NULL || !is_user_vaddr(addr))
 	{
-		exit(-1)
+		exit(-1);
 	}
 }
