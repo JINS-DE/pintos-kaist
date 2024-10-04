@@ -56,7 +56,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
     //     default:
     //         printf("Unknown system call: %d\n", syscall_no);
     //         thread_exit();  // 알 수 없는 시스템 호출일 경우 종료
-    }
+    // }
 }
 
 // void halt(){
