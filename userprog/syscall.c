@@ -85,8 +85,8 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		f->R.rax = wait(f->R.rdi);
 		break;
 	case SYS_EXEC:
-        f->R.rax = exec(f->R.rdi);
-        break;
+		f->R.rax = exec(f->R.rdi); /* Switch current process. */
+		break;
 	case SYS_CREATE:
 		const char *file_created = (const char *)f->R.rdi;
 		unsigned initial_size = f->R.rsi;
@@ -173,6 +173,32 @@ void exit(int status)
 	printf("%s: exit(%d)\n", current->name, status);
 	/* 스레드 종료 */
 	thread_exit();
+}
+
+int exec(char *cmd_line){
+	// cmd_line이 유효한 사용자 주소인지 확인 -> 잘못된 주소인 경우 종료/예외 발생
+	check_address(cmd_line);
+
+	// process.c 파일의 process_create_initd 함수와 유사하다.
+	// 단, 스레드를 새로 생성하는 건 fork에서 수행하므로
+	// exec는 이미 존재하는 프로세스의 컨텍스트를 교체하는 작업을 하므로
+	// 현재 프로세스의 주소 공간을 교체하여 새로운 프로그램을 실행
+	// 이 함수에서는 새 스레드를 생성하지 않고 process_exec을 호출한다.
+
+	
+	// process_exec 함수 안에서 filename을 변경해야 하므로
+	// 커널 메모리 공간에 cmd_line의 복사본을 만든다.
+	// (현재는 const char* 형식이기 때문에 수정할 수 없다.)
+	char *cmd_line_copy;
+	cmd_line_copy = palloc_get_page(0);
+	if (cmd_line_copy == NULL)
+		exit(-1);							  // 메모리 할당 실패 시 status -1로 종료한다.
+	strlcpy(cmd_line_copy, cmd_line, PGSIZE); // cmd_line을 복사한다.
+
+
+	// 스레드의 이름을 변경하지 않고 바로 실행한다.
+	if (process_exec(cmd_line_copy) == -1)
+		exit(-1); // 실패 시 status -1로 종료한다.
 }
 
 /**
@@ -333,13 +359,6 @@ tell (int fd){
 	file_tell(&file);
 }
 
-// void check_address(void *addr)
-// {
-// 	if (addr == NULL || !is_user_vaddr(addr))
-// 	{
-// 		exit(-1);
-// 	}
-// }
 void check_address(void *addr) {
 	struct thread *t = thread_current();
 	if (!is_user_vaddr(addr)||addr == NULL||
