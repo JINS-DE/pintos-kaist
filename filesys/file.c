@@ -3,12 +3,21 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
-/* An open file. */
+/* 열린 파일을 나타내는 구조체. */
 struct file {
-	struct inode *inode;        /* File's inode. */
-	off_t pos;                  /* Current position. */
-	bool deny_write;            /* Has file_deny_write() been called? */
+    struct inode *inode;        /* 파일의 inode를 가리키는 포인터. 
+                                   inode는 파일 시스템에서 파일이나 디렉터리의 메타데이터(크기, 위치, 권한 등)를 
+                                   저장하는 데이터 구조입니다. 즉, 이 필드는 파일의 inode 정보를 참조합니다. */
+    
+    off_t pos;                  /* 파일에서 현재 읽기/쓰기 작업을 할 때의 위치를 나타냅니다.
+                                   pos는 오프셋(offset)으로, 파일의 시작 부분으로부터 몇 바이트 떨어진 지점을 나타냅니다. 
+                                   예를 들어, 파일의 100번째 바이트에서 작업을 하고 싶다면 이 값은 100이 됩니다. */
+    
+    bool deny_write;            /* 파일에 대해 쓰기 작업이 금지되었는지 여부를 나타냅니다.
+                                   true일 경우, 파일에 쓰기가 불가능하며 이는 file_deny_write() 함수가 호출되었음을 의미합니다. 
+                                   이 플래그는 파일이 쓰기 금지 상태인지 아닌지를 추적하는 데 사용됩니다. */
 };
+
 
 /* Opens a file for the given INODE, of which it takes ownership,
  * and returns the new file.  Returns a null pointer if an

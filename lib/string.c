@@ -219,38 +219,38 @@ char *
 strtok_r (char *s, const char *delimiters, char **save_ptr) {
 	char *token;
 
-	ASSERT (delimiters != NULL);
-	ASSERT (save_ptr != NULL);
+	ASSERT (delimiters != NULL); // 구분자는 NULL이 아니어야 한다.
+	ASSERT (save_ptr != NULL);   // save_ptr도 NULL이 아니어야 한다.
 
-	/* If S is nonnull, start from it.
-	   If S is null, start from saved position. */
+	/* S가 NULL이 아니면 S에서 시작한다.
+	   S가 NULL이면 저장된 위치에서 시작한다. */
 	if (s == NULL)
 		s = *save_ptr;
-	ASSERT (s != NULL);
+	ASSERT (s != NULL); // s는 NULL이 아니어야 한다.
 
-	/* Skip any DELIMITERS at our current position. */
+	/* 현재 위치에서 구분자를 건너뛴다. */
 	while (strchr (delimiters, *s) != NULL) {
-		/* strchr() will always return nonnull if we're searching
-		   for a null byte, because every string contains a null
-		   byte (at the end). */
+		/* 널 바이트를 찾고 있다면,
+		   모든 문자열은 끝에 널 바이트가 있기 때문에
+		   strchr()는 항상 NULL이 아닌 값을 반환한다. */
 		if (*s == '\0') {
-			*save_ptr = s;
-			return NULL;
+			*save_ptr = s; // 문자열의 끝을 저장
+			return NULL; // 더 이상 토큰이 없음을 반환
 		}
 
-		s++;
+		s++; // 구분자를 건너뛴다.
 	}
 
-	/* Skip any non-DELIMITERS up to the end of the string. */
-	token = s;
+	/* 문자열의 끝까지 구분자가 아닌 부분을 건너뛴다. */
+	token = s; // 현재 위치를 토큰의 시작으로 설정
 	while (strchr (delimiters, *s) == NULL)
 		s++;
 	if (*s != '\0') {
-		*s = '\0';
-		*save_ptr = s + 1;
+		*s = '\0'; // 구분자를 널 문자로 변경하여 현재 토큰 종결
+		*save_ptr = s + 1; // 다음 위치를 저장
 	} else
-		*save_ptr = s;
-	return token;
+		*save_ptr = s; // 문자열의 끝에 도달한 경우
+	return token; // 발견한 토큰 반환
 }
 
 /* Sets the SIZE bytes in DST to VALUE. */

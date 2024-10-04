@@ -26,15 +26,34 @@ bytes_to_sectors (off_t size) {
 	return DIV_ROUND_UP (size, DISK_SECTOR_SIZE);
 }
 
-/* In-memory inode. */
+/* 메모리 내에서 관리되는 inode 구조체. */
 struct inode {
-	struct list_elem elem;              /* Element in inode list. */
-	disk_sector_t sector;               /* Sector number of disk location. */
-	int open_cnt;                       /* Number of openers. */
-	bool removed;                       /* True if deleted, false otherwise. */
-	int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-	struct inode_disk data;             /* Inode content. */
+    struct list_elem elem;              /* inode 리스트에서 이 inode를 위한 리스트 요소.
+                                           파일 시스템 내에서 여러 inode를 리스트로 관리할 때,
+                                           이 필드는 해당 리스트에 연결될 수 있도록 사용됩니다. */
+    
+    disk_sector_t sector;               /* 디스크 상에서 이 inode가 저장된 섹터 번호.
+                                           섹터는 디스크에서 데이터를 저장하는 가장 작은 단위이며,
+                                           이 필드는 이 inode가 어느 디스크 섹터에 위치하는지 나타냅니다. */
+    
+    int open_cnt;                       /* 이 inode를 열고 있는 파일 디스크립터의 수.
+                                           이 값은 몇 개의 프로세스나 스레드가 동시에 이 inode에 접근하고 있는지 추적합니다. 
+                                           여러 프로세스가 같은 파일을 동시에 열 수 있기 때문에 이 값을 유지하는 것이 중요합니다. */
+    
+    bool removed;                       /* 이 inode가 파일 시스템에서 삭제되었는지 여부.
+                                           true일 경우 이 inode에 해당하는 파일은 삭제된 상태이지만,
+                                           여전히 열려 있는 파일 디스크립터로 인해 계속 접근할 수 있을 수 있습니다. 
+                                           false일 경우 파일이 정상적으로 유지되고 있는 상태입니다. */
+    
+    int deny_write_cnt;                 /* 쓰기 작업을 허용하지 않도록 설정된 횟수.
+                                           이 값이 0이면 쓰기 작업이 허용되며, 0보다 크면 쓰기 작업이 금지됩니다. 
+                                           여러 프로세스가 이 파일을 열었을 때 쓰기 권한을 제어하는 데 사용됩니다. */
+    
+    struct inode_disk data;             /* 이 inode가 참조하는 실제 데이터.
+                                           inode는 메타데이터(파일 크기, 위치 등)를 저장하는 구조체이고,
+                                           이 필드는 실제 디스크 상에 있는 inode의 데이터를 메모리에 저장합니다. */
 };
+
 
 /* Returns the disk sector that contains byte offset POS within
  * INODE.

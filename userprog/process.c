@@ -41,6 +41,7 @@ process_init (void) {
 tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
+	char *save_ptr;
 	tid_t tid;
 
 	/* Make a copy of FILE_NAME.
@@ -49,7 +50,8 @@ process_create_initd (const char *file_name) {
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
-
+	
+	file_name = strtok_r(file_name, " ", &save_ptr);
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
@@ -158,38 +160,114 @@ error:
 	thread_exit ();
 }
 
-/* Switch the current execution context to the f_name.
- * Returns -1 on fail. */
+/* 현재 실행 중인 프로세스를 정리하고,
+ * 주어진 실행 파일로 전환합니다.
+ * 만약 파일 로드에 실패하면 -1을 반환하고 종료됩니다. */
 int
 process_exec (void *f_name) {
-	char *file_name = f_name;
-	bool success;
+	char *file_name = f_name;  // `f_name`은 실행할 프로그램 파일 이름	
+	bool success;  // 파일 로드 성공 여부를 저장할 변수
 
-	/* We cannot use the intr_frame in the thread structure.
-	 * This is because when current thread rescheduled,
-	 * it stores the execution information to the member. */
-	struct intr_frame _if;
-	_if.ds = _if.es = _if.ss = SEL_UDSEG;
-	_if.cs = SEL_UCSEG;
-	_if.eflags = FLAG_IF | FLAG_MBS;
+	char *token, *save_ptr, *argv[64];
+	int argc = 0 ; 
 
-	/* We first kill the current context */
-	process_cleanup ();
+	/* 현재 스레드 구조체의 intr_frame을 사용할 수 없습니다.
+	 * 왜냐하면 스레드는 스케줄링마다 intr_frame에 값을 저장하기 때문에,
+	 * 다른 함수에서 재사용하면 값이 꼬일 수 있습니다.
+	 * 그래서 새로운 `intr_frame` 구조체를 선언하여 여기에 상태 정보를 담습니다. */
+	struct intr_frame _if;  // 인터럽트 프레임: CPU 상태 정보 저장 (레지스터, 플래그 등)
+	
+	// 사용자 세그먼트 설정 (이 값들은 사용자 모드에서 실행되는 프로세스가 사용할 세그먼트)
+	_if.ds = _if.es = _if.ss = SEL_UDSEG;  // 데이터 세그먼트 (사용자용)
+	
+	// 코드 세그먼트 설정 (사용자 모드에서 실행)
+	_if.cs = SEL_UCSEG;  // 사용자 코드 세그먼트
+	
+	// CPU 플래그 설정: 인터럽트 허용 플래그(IF)와 시스템 필수 플래그(MBS)를 세팅
+	_if.eflags = FLAG_IF | FLAG_MBS;  // 플래그 설정 (인터럽트 활성화와 필수값 세팅)
 
-	/* And then load the binary */
-	success = load (file_name, &_if);
+	/* 현재 실행 중인 프로세스를 정리합니다.
+	 * 이는 해당 프로세스가 사용 중이던 메모리, 파일 디스크립터, 자원 등을 해제하고,
+	 * 재사용할 수 있도록 돌려주는 작업입니다. */
+	process_cleanup ();  // 현재 프로세스 정리 (메모리 및 자원을 해제)
 
-	/* If load failed, quit. */
-	palloc_free_page (file_name);
+	token = strtok_r(file_name, " ", &save_ptr);
+	while(token != NULL){
+		argv[argc++]=token;
+		printf("--------------\n");
+		printf("------%s-----\n",token);
+		printf("--------------\n");
+		token = strtok_r(NULL," ",&save_ptr);
+	
+	}
+
+
+
+	/* 주어진 파일을 로드합니다.
+	 * 화면에 보이는 `file_name`을 로드하는데,
+	 * 이 과정에서 `_if` 구조체의 내용을 참고하여 CPU 상태 정보와 메모리 설정을 같이 만듭니다.
+	 * 성공 시 `success = true`, 실패 시 `success = false`가 되며 결과에 따라 처리가 달라집니다. */
+	success = load (file_name, &_if);  // 파일을 메모리에 로드하여 프로그램 준비
+
+	
+	// Argument Passing ~
+	argument_stack(argv, argc, &_if); // 함수 내부에서 argv와 rsp의 값을 직접 변경하기 위해 주소 전달
+    
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
+	// ~ Argument Passing
+
+	/* 파일 로드가 실패했을 경우, 파일 이름으로 할당한 메모리를 해제하고 `-1`을 반환하여 종료합니다. */
+	palloc_free_page (file_name);  // `file_name`이 가리키는 페이지(메모리)를 해제
 	if (!success)
-		return -1;
+		return -1;  // 프로그램 로드가 실패하면 -1 반환 (프로세스 전환 실패)
 
-	/* Start switched process. */
-	do_iret (&_if);
-	NOT_REACHED ();
+	/* 로드가 정상적으로 끝났으면, 이제 `_if` 구조체에 저장된
+	 * 새 프로세스로 전환하여 실행을 시작합니다.
+	 * `do_iret()` 함수는 `_if`에 저장된 CPU 상태를 참고하여 컨텍스트를 전환합니다.
+	 * 이 과정에서 새로 로드된 프로그램을 실행하게 됩니다. */
+	do_iret (&_if);  // `do_iret`을 호출하여 새로운 프로세스 실행으로 전환
+	NOT_REACHED();  // `do_iret`이 실행되면 새 프로그램으로 넘어가므로 이 코드는 실행되지 않아야 함 (여기 도달하면 논리 오류)
 }
+void argument_stack(char **argv, int argc, struct intr_frame *if_)
+{
+	char *arg_address[128];
 
+	// 프로그램 이름, 인자 문자열 push
+	for(int i = argc - 1; i >= 0; i--)
+	{
+		int arg_i_len = strlen(argv[i]) +1;	//sential(\0) 포함
+		if_->rsp -= arg_i_len;			//인자 크기만큼 스택을 늘려줌
+		memcpy(if_->rsp, argv[i], arg_i_len);	//늘려준 공간에 해당 인자를 복사
+		arg_address[i] = (char *)if_->rsp;	//arg_address에 위 인자를 복사해준 주소값을 저장
+	}
 
+	// word-align(8의 배수)로 맞춰주기
+	if(if_->rsp % 8 != 0)
+	{	
+		int padding = if_->rsp % 8;
+		if_->rsp -= padding;
+		memset(if_->rsp, 0, padding);
+	}
+
+	// 인자 문자열 종료를 나타내는 0 push
+	if_->rsp -= 8; 	
+	memset(if_->rsp, 0, 8);
+
+	// 각 인자 문자열의 주소 push
+	for(int i = argc-1; i >= 0; i--)
+	{
+		if_->rsp -= 8;
+		memcpy(if_->rsp, &arg_address[i], 8);
+	}
+
+	// fake return address
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
+
+	//rdi 에는 인자의 개수, rsi에는 argv 첫 인자의 시작 주소 저장
+	if_->R.rdi = argc;
+	if_->R.rsi = if_->rsp + 8;	//fake return address + 8
+}
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
  * exception), returns -1.  If TID is invalid or if it was not a
@@ -204,6 +282,9 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while(1){
+	
+	}
 	return -1;
 }
 
@@ -219,44 +300,58 @@ process_exit (void) {
 	process_cleanup ();
 }
 
-/* Free the current process's resources. */
+/* 종합적인 동작 과정
+이 함수는 운영체제에서 프로세스가 끝날 때 수행되는 메모리 정리 작업입니다. 
+페이지 테이블(프로세스의 메모리 관리 구조)을 삭제하고, 
+가상 메모리 테이블을 포함해 필요한 모든 메모리 자원을 반환하는 역할을 합니다. */
 static void
 process_cleanup (void) {
-	struct thread *curr = thread_current ();
+    // 현재 실행 중인 스레드를 가져온다.
+    struct thread *curr = thread_current ();
 
 #ifdef VM
-	supplemental_page_table_kill (&curr->spt);
+    // (가상 메모리가 활성화되어 있다면) 현재 스레드의 보조 페이지 테이블을 제거한다.
+    // supplemental page table은 페이지 테이블의 추가/확장 버전으로 스와핑(디스크와 메모리 간 페이지 전환)을 처리하거나
+    // 보조 메모리 시스템을 관리하는 구조체입니다.
+    supplemental_page_table_kill (&curr->spt);
 #endif
 
-	uint64_t *pml4;
-	/* Destroy the current process's page directory and switch back
-	 * to the kernel-only page directory. */
-	pml4 = curr->pml4;
-	if (pml4 != NULL) {
-		/* Correct ordering here is crucial.  We must set
-		 * cur->pagedir to NULL before switching page directories,
-		 * so that a timer interrupt can't switch back to the
-		 * process page directory.  We must activate the base page
-		 * directory before destroying the process's page
-		 * directory, or our active page directory will be one
-		 * that's been freed (and cleared). */
-		curr->pml4 = NULL;
-		pml4_activate (NULL);
-		pml4_destroy (pml4);
-	}
+    uint64_t *pml4;  // 페이지 테이블을 가리키는 포인터입니다. (PML4는 x86-64 아키텍처에서 사용하는 4단계 페이지 테이블 중 가장 상위 레벨입니다.)
+
+    /* 현재 프로세스의 페이지 디렉토리를 파괴하고
+     * 커널 전용 페이지 디렉토리로 다시 전환합니다. */
+    pml4 = curr->pml4;  // 현재 스레드의 페이지 테이블을 pml4 변수에 저장.
+    if (pml4 != NULL) {
+        /* 여기서의 처리 순서가 매우 중요합니다.
+         * 타이머 인터럽트가 프로세스의 페이지 디렉토리로 다시 전환하지 않도록,
+         * 페이지 디렉토리를 전환하기 전에 현재 스레드의 pml4를 NULL로 설정해야 합니다.
+         *
+         * 프로세스의 페이지 디렉토리를 파괴(해제)하기 전에
+         * 기본 커널 전용 페이지 디렉토리로 전환해야 합니다.
+         * 그렇지 않으면 현재 활성화된 페이지 디렉토리가 해제되었거나 삭제된 페이지 디렉토리가 될 수 있습니다. */
+        curr->pml4 = NULL;  // 현재 스레드의 페이지 테이블을 NULL로 설정 (다른 페이지 테이블로 전환하지 않도록).
+        pml4_activate (NULL);  // 커널 전용 페이지 테이블을 활성화. (NULL을 인자로 넘겨서 기본 페이지 테이블 설정).
+        pml4_destroy (pml4);  // 기존 프로세스의 페이지 테이블(pml4)을 파괴(메모리 해제).
+    }
 }
 
-/* Sets up the CPU for running user code in the nest thread.
- * This function is called on every context switch. */
+/* 다음 스레드에서 사용자 코드를 실행하기 위해 CPU를 설정하는 함수.
+ * 이 함수는 매번 컨텍스트 스위치가 발생할 때 호출됩니다. */
 void
 process_activate (struct thread *next) {
-	/* Activate thread's page tables. */
-	pml4_activate (next->pml4);
+    /* 스레드의 페이지 테이블을 활성화.
+       페이지 테이블은 프로세스의 가상 메모리와 실제 물리 메모리 간의 매핑을 관리하는 구조입니다.
+       여기서는 다음에 실행될 스레드(`next`)의 페이지 테이블을 CPU에 활성화하여, 해당 스레드가
+       올바른 메모리 주소에 접근할 수 있도록 합니다. */
+    pml4_activate (next->pml4);
 
-	/* Set thread's kernel stack for use in processing interrupts. */
-	tss_update (next);
+    /* 스레드의 커널 스택을 인터럽트 처리 중에 사용할 수 있도록 설정.
+       커널 스택은 각 스레드마다 따로 할당되며, 이 스택은 인터럽트가 발생할 때
+       커널 모드에서 처리할 데이터를 저장하는 데 사용됩니다. 
+       `tss_update` 함수는 현재 스레드의 커널 스택 위치를 CPU의 TSS(Task State Segment)에 업데이트하여,
+       인터럽트가 발생하면 이 스택을 사용할 수 있도록 합니다. */
+    tss_update (next);
 }
-
 /* We load ELF binaries.  The following definitions are taken
  * from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -315,114 +410,124 @@ static bool validate_segment (const struct Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
-
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
+	// 현재 실행 중인 스레드 가져오기 (스레드는 프로세스와 동일)
 	struct thread *t = thread_current ();
+	
+	// ELF 헤더와 파일 포인터 선언
 	struct ELF ehdr;
 	struct file *file = NULL;
-	off_t file_ofs;
-	bool success = false;
-	int i;
+	off_t file_ofs;  // 파일 오프셋(위치)를 저장하기 위한 변수
+	bool success = false;  // 파일 로드가 성공했는지 여부를 저장하는 변수
+	int i;  // 반복문에서 쓰일 변수
 
-	/* Allocate and activate page directory. */
-	t->pml4 = pml4_create ();
-	if (t->pml4 == NULL)
+	/* 페이지 테이블(pml4)을 생성하고 활성화합니다. */
+	t->pml4 = pml4_create ();  // 새로운 페이지 맵 레벨 4 테이블 생성 (가상 메모리 맵핑을 위한)
+	if (t->pml4 == NULL)  // 페이지 테이블 생성이 실패하면 프로그램 로드를 실패로 처리
 		goto done;
-	process_activate (thread_current ());
+	process_activate (thread_current ());  // 새로운 페이지 테이블 활성화 (새 페이지 디렉토리를 CPU에 로드)
 
-	/* Open executable file. */
-	file = filesys_open (file_name);
-	if (file == NULL) {
+	/* 실행 파일을 엽니다. */
+	file = filesys_open (file_name);  // 주어진 파일 이름으로 실행 파일을 엽니다.
+	if (file == NULL) {  // 파일이 없거나 열기에 실패한 경우
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
-	/* Read and verify executable header. */
-	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
-			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
-			|| ehdr.e_type != 2
-			|| ehdr.e_machine != 0x3E // amd64
-			|| ehdr.e_version != 1
-			|| ehdr.e_phentsize != sizeof (struct Phdr)
-			|| ehdr.e_phnum > 1024) {
+	/* ELF 헤더를 읽고 검증합니다. (정상적인 ELF 실행 파일인지 확인) */
+	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr  // ELF 헤더 크기 만큼 읽기
+			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)     // 첫 7바이트로 ELF 매직넘버 확인
+			|| ehdr.e_type != 2  // 실행 파일 타입 체크 (ET_EXEC 타입)
+			|| ehdr.e_machine != 0x3E  // 아키텍처 확인 (0x3E = x86-64)
+			|| ehdr.e_version != 1  // ELF 버전 검증
+			|| ehdr.e_phentsize != sizeof (struct Phdr)  // 프로그램 헤더 엔트리 크기 확인
+			|| ehdr.e_phnum > 1024) {  // 프로그램 헤더의 수가 합리적인 범위인지 확인
 		printf ("load: %s: error loading executable\n", file_name);
-		goto done;
+		goto done;  // 검사 중 하나라도 실패하면 `done`으로 이동해 종료
 	}
 
-	/* Read program headers. */
-	file_ofs = ehdr.e_phoff;
-	for (i = 0; i < ehdr.e_phnum; i++) {
-		struct Phdr phdr;
+	/* 프로그램 헤더 전체를 순회하며 메모리에 적재합니다. */
+	file_ofs = ehdr.e_phoff;  // 프로그램 헤더가 시작되는 파일 내부 오프셋을 가져옴
+	for (i = 0; i < ehdr.e_phnum; i++) {  // 각 프로그램 헤더를 하나씩 읽어서 처리
+		struct Phdr phdr;  // 프로그램 헤더 구조체 선언
 
+		// 파일 위치가 올바른지 확인
 		if (file_ofs < 0 || file_ofs > file_length (file))
 			goto done;
-		file_seek (file, file_ofs);
+		file_seek (file, file_ofs);  // 파일에서 프로그램 헤더가 위치한 곳으로 이동
 
+		// 하나의 프로그램 헤더를 읽기
 		if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
 			goto done;
-		file_ofs += sizeof phdr;
+		file_ofs += sizeof phdr;  // 다음 헤더로 이동하기 위해 오프셋을 증가
+
+		// 프로그램 헤더의 종류에 따라 처리
 		switch (phdr.p_type) {
 			case PT_NULL:
 			case PT_NOTE:
 			case PT_PHDR:
 			case PT_STACK:
 			default:
-				/* Ignore this segment. */
+				/* 무시할 섹션 */
 				break;
 			case PT_DYNAMIC:
 			case PT_INTERP:
 			case PT_SHLIB:
-				goto done;
+				goto done;  // 지원하지 않는 프로그램 헤더
 			case PT_LOAD:
+				// 로드 가능 세그먼트인 경우 실행
 				if (validate_segment (&phdr, file)) {
-					bool writable = (phdr.p_flags & PF_W) != 0;
+					bool writable = (phdr.p_flags & PF_W) != 0;  // 쓰기가 가능한지 확인
+					// 해당 세그먼트가 파일 상에 존재하는 페이지와 메모리 상 페이지 위치 계산
 					uint64_t file_page = phdr.p_offset & ~PGMASK;
 					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
 					uint64_t page_offset = phdr.p_vaddr & PGMASK;
 					uint32_t read_bytes, zero_bytes;
+
 					if (phdr.p_filesz > 0) {
-						/* Normal segment.
-						 * Read initial part from disk and zero the rest. */
+						/* 일반적인 세그먼트:
+						 * 파일에서 읽어야 할 바이트와 남은 영역을 0으로 채움 */
 						read_bytes = page_offset + phdr.p_filesz;
 						zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
 								- read_bytes);
 					} else {
-						/* Entirely zero.
-						 * Don't read anything from disk. */
+						/* 파일에 존재하지 않는 메모리.
+						 * 즉, 0으로 초기화. */
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+					// 세그먼트를 메모리에 적재
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
 						goto done;
+				} else {
+					goto done;  // 세그먼트가 유효하지 않으면 종료
 				}
-				else
-					goto done;
 				break;
 		}
 	}
 
-	/* Set up stack. */
-	if (!setup_stack (if_))
+	/* 스택을 설정합니다. */
+	if (!setup_stack (if_))  // 초기 스택을 설정하는 함수 호출
 		goto done;
 
-	/* Start address. */
-	if_->rip = ehdr.e_entry;
+	/* 프로그램의 진입점(시작 주소)을 설정합니다. */
+	if_->rip = ehdr.e_entry;  // 실행을 시작할 주소(RIP 레지스터에 해당)를 설정
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	/* TODO: 이 부분에는 프로그램 인자 전달 등의 작업을 추가해야 합니다. */
+	/* TODO: argument passing 구현은 여기에 추가될 것입니다. */
 
-	success = true;
+	success = true;  // 모든 과정이 문제없이 완료되었을 경우 성공으로 설정
 
 done:
-	/* We arrive here whether the load is successful or not. */
-	file_close (file);
-	return success;
+	/* 파일을 닫고, 성공 여부에 상관없이 메모리를 정리하고 반환합니다.  */
+	file_close (file);  // 열린 파일 객체 해제
+	return success;  // 성공 여부 반환
 }
 
 

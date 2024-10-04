@@ -296,7 +296,7 @@ bool donate_high_priority(const struct list_elem *a, const struct list_elem *b, 
 
 bool check_priority_threads()
 {
-	if (list_empty(&ready_list))
+	if (list_empty(&ready_list)|| thread_current()==idle_thread || (intr_context()))
 	{
 		return false;
 	}

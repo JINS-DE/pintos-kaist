@@ -40,7 +40,43 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
-	// TODO: Your implementation goes here.
-	printf ("system call!\n");
-	thread_exit ();
+	int syscall_no = f->R.rax;
+
+    // switch (syscall_no) {
+    //     case SYS_HALT:      // 시스템 종료
+    //         halt();
+    //         break;
+    //     case SYS_EXIT:      // 프로세스 종료
+    //         exit(f->R.rdi); // %rdi에 담긴 status 인수 사용
+    //         break;
+    //     case SYS_EXEC:      // 새로운 프로세스 실행
+    //         exec(f->R.rdi); // %rdi에 담긴 cmd_line 인수 사용
+    //         break;
+    //     // 이후 추가적인 시스템 호출들에 대한 case
+    //     default:
+    //         printf("Unknown system call: %d\n", syscall_no);
+    //         thread_exit();  // 알 수 없는 시스템 호출일 경우 종료
+    }
 }
+
+// void halt(){
+// 	power_off();
+// }
+
+// void check_address(void *addr) {
+// 	struct thread *t = thread_current();
+// 	/* --- Project 2: User memory access --- */
+// 	// if (!is_user_vaddr(addr)||addr == NULL) 
+// 	//-> 이 경우는 유저 주소 영역 내에서도 할당되지 않는 공간 가리키는 것을 체크하지 않음. 그래서 
+// 	// pml4_get_page를 추가해줘야!
+// 	if (!is_user_vaddr(addr)||addr == NULL||
+// 	pml4_get_page(t->pml4, addr)== NULL)
+// 	{
+// 		exit(-1);
+// 	}
+// }
+// void get_argument(void *esp, int *arg , int count)
+// {
+// /* 유저 스택에 저장된 인자값들을 커널로 저장 */
+// /* 인자가 저장된 위치가 유저영역인지 확인 */
+// }

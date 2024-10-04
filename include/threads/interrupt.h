@@ -35,33 +35,36 @@ struct gp_registers {
 } __attribute__((packed));
 
 struct intr_frame {
-	/* Pushed by intr_entry in intr-stubs.S.
-	   These are the interrupted task's saved registers. */
-	struct gp_registers R;
-	uint16_t es;
-	uint16_t __pad1;
-	uint32_t __pad2;
-	uint16_t ds;
-	uint16_t __pad3;
-	uint32_t __pad4;
-	/* Pushed by intrNN_stub in intr-stubs.S. */
-	uint64_t vec_no; /* Interrupt vector number. */
-/* Sometimes pushed by the CPU,
-   otherwise for consistency pushed as 0 by intrNN_stub.
-   The CPU puts it just under `eip', but we move it here. */
-	uint64_t error_code;
-/* Pushed by the CPU.
-   These are the interrupted task's saved registers. */
-	uintptr_t rip;
-	uint16_t cs;
-	uint16_t __pad5;
-	uint32_t __pad6;
-	uint64_t eflags;
-	uintptr_t rsp;
-	uint16_t ss;
-	uint16_t __pad7;
-	uint32_t __pad8;
-} __attribute__((packed));
+	/* intr-stubs.S의 intr_entry에서 저장됨.
+	   이 값들은 인터럽트된 작업의 레지스터 상태를 저장하는 부분입니다. */
+	struct gp_registers R;  // 일반 레지스터 저장
+	uint16_t es;            // 세그먼트 레지스터 es
+	uint16_t __pad1;        // 정렬을 맞추기 위한 패딩
+	uint32_t __pad2;        // 정렬을 맞추기 위한 패딩
+	uint16_t ds;            // 세그먼트 레지스터 ds
+	uint16_t __pad3;        // 정렬을 맞추기 위한 패딩
+	uint32_t __pad4;        // 정렬을 맞추기 위한 패딩
+	
+	/* intr-stubs.S의 intrNN_stub에서 저장됨. */
+	uint64_t vec_no; /* 인터럽트 벡터 번호 (어떤 인터럽트가 발생했는지 나타냅니다.) */
+
+	/* 종종 CPU에 의해 저장되며,
+	   그렇지 않으면 intrNN_stub에서 일관성을 위해 0으로 설정됩니다.
+	   CPU는 이 값을 `eip` 바로 아래에 두지만, 여기서는 이 위치로 옮깁니다. */
+	uint64_t error_code;  // 에러 코드 (인터럽트 발생 시, 특정 상황에서 전달됨)
+
+	/* CPU에 의해 저장됨.
+	   이 값들은 인터럽트된 작업의 레지스터 상태를 저장하는 부분입니다. */
+	uintptr_t rip;     // 명령어 포인터 레지스터 (프로그램 카운터) 저장 (인터럽트 발생 시 실행 중이던 명령어 주소)
+	uint16_t cs;       // 코드 세그먼트 레지스터
+	uint16_t __pad5;   // 정렬을 맞추기 위한 패딩
+	uint32_t __pad6;   // 정렬을 맞추기 위한 패딩
+	uint64_t eflags;   // 플래그 레지스터 저장 (CPU의 상태를 나타냄)
+	uintptr_t rsp;     // 스택 포인터 레지스터 (인터럽트 당시의 스택 주소)
+	uint16_t ss;       // 스택 세그먼트 레지스터
+	uint16_t __pad7;   // 정렬을 맞추기 위한 패딩
+	uint32_t __pad8;   // 정렬을 맞추기 위한 패딩
+} __attribute__((packed));  // 메모리 패딩을 없애고 원하는 대로 정렬하는 속성
 
 typedef void intr_handler_func (struct intr_frame *);
 
