@@ -13,6 +13,7 @@
 #include "include/filesys/inode.h"
 #include "include/filesys/directory.h"
 #include "filesys/file.h"
+#include "threads/synch.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -21,10 +22,17 @@ void halt(void);
 void exit(int status);
 int fork(const char *thread_name, struct intr_frame *f);
 int wait(int pid);
+int exec(const char *cmd_line);
 void close(int fd);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 int filesize(int fd);
+int read (int fd, void *buffer, unsigned size);
+int write (int fd, void *buffer, unsigned size);
+void seek(int fd, unsigned position);
+unsigned tell(int fd);
+
+struct lock file_lock;
 
 /* System call.
  *
@@ -50,6 +58,8 @@ void syscall_init(void)
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			  FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+
+	lock_init(&file_lock);  // 파일 시스템 락 초기화
 }
 
 /* The main system call interface */
@@ -75,8 +85,8 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		f->R.rax = wait(f->R.rdi);
 		break;
 	case SYS_EXEC:
-		// f->R.rax = exec(f->R.rdi); /* Switch current process. */
-		break;
+        f->R.rax = exec(f->R.rdi);
+        break;
 	case SYS_CREATE:
 		const char *file_created = (const char *)f->R.rdi;
 		unsigned initial_size = f->R.rsi;
@@ -95,26 +105,25 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		f->R.rax = filesize(fd_size);
 		break;
 	case SYS_READ:
-		// read()
+		read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_WRITE:
-		// write()
+		write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK:
-		// seek()
+		seek(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_TELL:
-		// tell()
+		tell(f->R.rdi);
 		break;
 	case SYS_CLOSE:
 		int fd_close = (int)f->R.rdi;
 		break;
 	default:
-		// exit(-1);
+		exit(-1);
 		break;
 	}
-	/* 위 함수의 결과는 rax에 저장되어야 함 */
-	// f->R.rax = result;
+
 	thread_exit();
 }
 
@@ -122,6 +131,30 @@ int wait(int pid)
 {
 	return process_wait(pid);
 }
+
+int exec(const char *cmd_line)
+{
+    check_address(cmd_line);
+
+    // process.c 파일의 process_create_initd 함수와 유사하다.
+    // 단, 스레드를 새로 생성하는 건 fork에서 수행하므로
+    // 이 함수에서는 새 스레드를 생성하지 않고 process_exec을 호출한다.
+
+    // process_exec 함수 안에서 filename을 변경해야 하므로
+    // 커널 메모리 공간에 cmd_line의 복사본을 만든다.
+    // (현재는 const char* 형식이기 때문에 수정할 수 없다.)
+    char *cmd_line_copy;
+    cmd_line_copy = palloc_get_page(0);
+    if (cmd_line_copy == NULL)
+        exit(-1);                              // 메모리 할당 실패 시 status -1로 종료한다.
+    strlcpy(cmd_line_copy, cmd_line, PGSIZE); // cmd_line을 복사한다.
+
+    // 스레드의 이름을 변경하지 않고 바로 실행한다.
+    if (process_exec(cmd_line_copy) == -1)
+        exit(-1); // 실패 시 status -1로 종료한다.
+}
+
+
 int fork(const char *thread_name, struct intr_frame *f)
 {
 	return process_fork(thread_name, f);
@@ -230,6 +263,76 @@ void close(int fd)
 	process_close_file(fd);
 }
 
+// by gpt
+int read(int fd, void *buffer, unsigned size)
+{
+    struct thread *curr = thread_current();
+    struct file *file = curr->fdt[fd];
+    int file_bytes = 0; // 초기화
+    
+    // 파일 디스크립터가 유효하지 않을 경우 에러 처리
+    if (fd < 0 || fd >= MAX_FD) {
+        return -1;
+    }
+
+    check_address(buffer); // 사용자 주소 검증
+
+    if (fd == 0) { // 표준 입력
+        for (unsigned i = 0; i < size; i++) {
+            ((uint8_t *)buffer)[i] = input_getc();
+        }
+        file_bytes = size;
+    } else if (fd >= 2) { // 파일 읽기
+        lock_acquire(&file_lock);
+        file_bytes = (int)file_read(file, buffer, size);
+        lock_release(&file_lock);
+    } else if (fd == 1) { // 표준 출력은 읽을 수 없음
+        return -1;
+    }
+
+    return file_bytes;
+}
+
+// by gpt
+int write(int fd, void *buffer, unsigned size)
+{
+    struct thread *curr = thread_current();
+    struct file *file = curr->fdt[fd];
+    int file_bytes = 0; // 초기화
+
+    // 파일 디스크립터가 유효하지 않을 경우 에러 처리
+    if (fd < 0 || fd >= MAX_FD) {
+        return -1;
+    }
+
+    check_address(buffer); // 사용자 주소 검증
+
+    if (fd == 0) { // 표준 입력은 쓸 수 없음
+        return -1;
+    } else if (fd == 1) { // 표준 출력
+        putbuf(buffer, size); // 수정된 부분
+        file_bytes = size;
+    } else if (fd >= 2) { // 파일 쓰기
+        lock_acquire(&file_lock);
+        file_bytes = (int)file_write(file, buffer, size);
+        lock_release(&file_lock);
+    }
+
+    return file_bytes;
+}
+
+void 
+seek(int fd, unsigned position){
+	struct file *file = process_get_file(fd);
+	file_seek(&file, position);
+}
+
+unsigned 
+tell (int fd){
+	struct file *file = process_get_file(fd);
+	file_tell(&file);
+}
+
 // void check_address(void *addr)
 // {
 // 	if (addr == NULL || !is_user_vaddr(addr))
@@ -237,3 +340,11 @@ void close(int fd)
 // 		exit(-1);
 // 	}
 // }
+void check_address(void *addr) {
+	struct thread *t = thread_current();
+	if (!is_user_vaddr(addr)||addr == NULL||
+	pml4_get_page(t->pml4, addr)== NULL)
+	{
+		exit(-1);
+	}
+}
