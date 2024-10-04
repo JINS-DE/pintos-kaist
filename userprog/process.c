@@ -300,8 +300,12 @@ void process_exit(void)
 	for (int i = 2; i < FDT_COUNT_LIMIT; i++)
 		close(i);
 	palloc_free_page(cur->fdt);
-	file_close(cur->running); // 2) 현재 실행 중인 파일도 닫는다.
-
+	// 프로세스에 열린 모든 파일을 닫는다.
+	for (int i = curr->next_fd-1; i >= 2; i--) {
+		if (curr->fdt[i] != NULL) {
+			process_close_file(i);
+		}
+	}
 	process_cleanup();
 
 	// 3) 자식이 종료될 때까지 대기하고 있는 부모에게 signal을 보낸다.
@@ -615,6 +619,41 @@ validate_segment(const struct Phdr *phdr, struct file *file)
 
 	/* It's okay. */
 	return true;
+}
+
+int process_add_file (struct file *f) {
+	struct thread *cur_t = thread_current();
+	int ret_fd = cur_t->next_fd;
+	if(ret_fd == MAX_FD) {
+		return -1;
+	}
+
+	cur_t->fdt[ret_fd] = f;
+	cur_t->next_fd += 1;
+	
+	return ret_fd;
+}
+
+struct file *process_get_file(int fd) {
+	struct thread *cur_t = thread_current();
+
+	if ( cur_t->fdt[fd] != NULL ) {
+		return cur_t->fdt[fd];
+	} else {
+		return NULL;
+	}
+}
+
+void process_close_file(int fd) {
+	struct thread *cur_t = thread_current();
+	struct file *cur_file = process_get_file(fd);
+
+	if(cur_file == NULL){
+		return;
+	}
+	file_close(fd);
+
+	cur_t->fdt[fd] = NULL;
 }
 
 #ifndef VM
