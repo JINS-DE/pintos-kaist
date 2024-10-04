@@ -13,6 +13,7 @@
 #include "include/filesys/inode.h"
 #include "include/filesys/directory.h"
 #include "filesys/file.h"
+#include "synch.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -25,6 +26,11 @@ void close(int fd);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 int filesize(int fd);
+int read (int fd, void *buffer, unsigned size);
+int write (int fd, void *buffer, unsigned size);
+void seek(int fd, unsigned position);
+unsigned tell(int fd);
+struct lock file_lock;
 
 /* System call.
  *
@@ -75,7 +81,7 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		f->R.rax = wait(f->R.rdi);
 		break;
 	case SYS_EXEC:
-		// f->R.rax = exec(f->R.rdi); /* Switch current process. */
+		f->R.rax = exec(f->R.rdi); /* Switch current process. */
 		break;
 	case SYS_CREATE:
 		const char *file_created = (const char *)f->R.rdi;
@@ -95,22 +101,24 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		f->R.rax = filesize(fd_size);
 		break;
 	case SYS_READ:
-		// read()
+		read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_WRITE:
-		// write()
+		write(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_SEEK:
-		// seek()
+		seek(f->R.rdi, f->R.rsi);
 		break;
 	case SYS_TELL:
-		// tell()
+		tell(f->R.rdi);
 		break;
 	case SYS_CLOSE:
 		int fd_close = (int)f->R.rdi;
 		break;
 	default:
-		// exit(-1);
+	{
+		printf("Invaild system call number. \n");
+		exit(-1);
 		break;
 	}
 	/* 위 함수의 결과는 rax에 저장되어야 함 */
@@ -140,6 +148,32 @@ void exit(int status)
 	printf("%s: exit(%d)\n", current->name, status);
 	/* 스레드 종료 */
 	thread_exit();
+}
+
+int exec(char *cmd_line){
+	// cmd_line이 유효한 사용자 주소인지 확인 -> 잘못된 주소인 경우 종료/예외 발생
+	check_address(cmd_line);
+
+	// process.c 파일의 process_create_initd 함수와 유사하다.
+	// 단, 스레드를 새로 생성하는 건 fork에서 수행하므로
+	// exec는 이미 존재하는 프로세스의 컨텍스트를 교체하는 작업을 하므로
+	// 현재 프로세스의 주소 공간을 교체하여 새로운 프로그램을 실행
+	// 이 함수에서는 새 스레드를 생성하지 않고 process_exec을 호출한다.
+
+	
+	// process_exec 함수 안에서 filename을 변경해야 하므로
+	// 커널 메모리 공간에 cmd_line의 복사본을 만든다.
+	// (현재는 const char* 형식이기 때문에 수정할 수 없다.)
+	char *cmd_line_copy;
+	cmd_line_copy = palloc_get_page(0);
+	if (cmd_line_copy == NULL)
+		exit(-1);							  // 메모리 할당 실패 시 status -1로 종료한다.
+	strlcpy(cmd_line_copy, cmd_line, PGSIZE); // cmd_line을 복사한다.
+
+
+	// 스레드의 이름을 변경하지 않고 바로 실행한다.
+	if (process_exec(cmd_line_copy) == -1)
+		exit(-1); // 실패 시 status -1로 종료한다.
 }
 
 /**
@@ -228,6 +262,87 @@ int filesize(int fd)
 void close(int fd)
 {
 	process_close_file(fd);
+}
+
+int read (int fd, void *buffer, unsigned size)
+ {
+	struct thread *curr = thread_current();
+	struct file *file = curr->fdt[fd];
+	int file_bytes;
+	if(fd < 0 || fd >= MAX_FD){
+		return -1;
+	}
+
+	if(file_bytes < 0){
+		return -1;
+	}
+
+	if (fd == 0) {
+		for(unsigned i = 0; i < size; i++)
+		{
+			((uint8_t *)buffer)[i] = input_getc();
+		}
+
+		file_bytes = size;
+	} else if(fd >= 2){
+		lock_acquire(&file_lock);
+		file_bytes = (int)file_read(file, buffer, size);
+		lock_release(&file_lock);
+	} else if (fd == 1){
+		return -1;
+	}
+	//todo fd = 1인경우?
+	return file_bytes;
+	
+
+ /* 파일에 동시 접근이 일어날 수 있으므로 Lock 사용 */
+ /* 파일 디스크립터를 이용하여 파일 객체 검색 */
+ /* 파일 디스크립터가 0일 경우 키보드에 입력을 버퍼에 저장 후
+버퍼의 저장한 크기를 리턴 (input_getc() 이용) */
+ /* 파일 디스크립터가 0이 아닐 경우 파일의 데이터를 크기만큼 저
+장 후 읽은 바이트 수를 리턴 */
+ }
+
+ int
+write (int fd, void *buffer, unsigned size){
+ {
+	struct thread *curr = thread_current();
+	struct file *file = curr->fdt[fd];
+	int file_bytes;
+	if(fd < 0 || fd >= MAX_FD){
+		return -1;
+	}
+
+	if(file_bytes < 0){
+		return -1;
+	}
+
+	if (fd == 0) {
+		return -1;
+	} else if (fd == 1){
+		for(unsigned i = 0; i < size; i++)
+	{
+		putbuf(&buffer, (size_t)size);
+	}	
+	file_bytes = size;
+	} else if(fd >= 2){
+		lock_acquire(&file_lock);
+		file_bytes = (int)file_write(file, buffer, size);
+		lock_release(&file_lock);
+	} 
+	return file_bytes;
+}
+}
+void 
+seek(int fd, unsigned position){
+	struct file *file = process_get_file(fd);
+	file_seek(&file, position);
+}
+
+unsigned 
+tell (int fd){
+	struct file *file = process_get_file(fd);
+	file_tell(&file);
 }
 
 // void check_address(void *addr)
