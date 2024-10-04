@@ -29,7 +29,7 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
 
-#define MAX_FD 128	   /* fd 최댓값 */
+#define MAX_FD 128 /* fd 최댓값 */
 
 /* A kernel thread or user process.
  *
@@ -119,8 +119,7 @@ struct thread
 
 	/* Owned by thread.c. */
 	struct intr_frame tf; /* Information for switching */
-	struct file **fdt;
-	int next_fd;
+
 	// 자식 프로세스 생성시
 	// 부모 프로세스의 사용자 영역 스택을 물려줘야하는데
 	// 커널영역으로 들어가면 부모프로세스의 rdi가 커널영역 스택을 가리키기 때문에

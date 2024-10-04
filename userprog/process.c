@@ -47,19 +47,7 @@ struct file *process_get_file(int fd)
 		return NULL;
 	}
 }
-void process_close_file(int fd)
-{
-	struct thread *cur_t = thread_current();
-	struct file *cur_file = process_get_file(fd);
 
-	if (cur_file == NULL)
-	{
-		return;
-	}
-	file_close(fd);
-
-	cur_t->fdt[fd] = NULL;
-}
 /* "initd"라는 첫 번째 사용자 프로그램을 FILE_NAME에서 로드하여 시작합니다.
  * 새 스레드는 process_create_initd()가 반환되기 전에 스케줄링될 수 있으며,
  * 심지어 종료될 수도 있습니다. initd의 스레드 ID를 반환하거나, 스레드를
@@ -301,8 +289,10 @@ void process_exit(void)
 		close(i);
 	palloc_free_page(cur->fdt);
 	// 프로세스에 열린 모든 파일을 닫는다.
-	for (int i = curr->next_fd-1; i >= 2; i--) {
-		if (curr->fdt[i] != NULL) {
+	for (int i = cur->next_fd - 1; i >= 2; i--)
+	{
+		if (cur->fdt[i] != NULL)
+		{
 			process_close_file(i);
 		}
 	}
@@ -621,34 +611,28 @@ validate_segment(const struct Phdr *phdr, struct file *file)
 	return true;
 }
 
-int process_add_file (struct file *f) {
+int process_add_file(struct file *f)
+{
 	struct thread *cur_t = thread_current();
 	int ret_fd = cur_t->next_fd;
-	if(ret_fd == MAX_FD) {
+	if (ret_fd == MAX_FD)
+	{
 		return -1;
 	}
 
 	cur_t->fdt[ret_fd] = f;
 	cur_t->next_fd += 1;
-	
+
 	return ret_fd;
 }
 
-struct file *process_get_file(int fd) {
-	struct thread *cur_t = thread_current();
-
-	if ( cur_t->fdt[fd] != NULL ) {
-		return cur_t->fdt[fd];
-	} else {
-		return NULL;
-	}
-}
-
-void process_close_file(int fd) {
+void process_close_file(int fd)
+{
 	struct thread *cur_t = thread_current();
 	struct file *cur_file = process_get_file(fd);
 
-	if(cur_file == NULL){
+	if (cur_file == NULL)
+	{
 		return;
 	}
 	file_close(fd);
