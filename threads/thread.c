@@ -200,8 +200,7 @@ void thread_print_stats(void)
    제공된 코드는 새 스레드의 `priority` 멤버를 PRIORITY로 설정하지만,
    실제 우선 순위 스케줄링은 구현되지 않았습니다.
    우선 순위 스케줄링은 문제 1-3의 목표입니다. */
-tid_t thread_create(const char *name, int priority,
-					thread_func *function, void *aux)
+tid_t thread_create(const char *name, int priority, thread_func *function, void *aux)
 {
 	struct thread *t;
 	tid_t tid;
@@ -237,23 +236,12 @@ tid_t thread_create(const char *name, int priority,
 	// 인터럽트를 활성화하는 플래그
 	t->tf.eflags = FLAG_IF;
 
-	// 현재 스레드의 자식으로 추가한다.
-	list_push_back(&thread_current()->child_list, &t->child_elem);
-	// 파일 디스크립터 초기화
-	t->next_fd = 2;
+	// 현재 스레드의 자식으로 추가
+    list_push_back(&thread_current()->child_list, &t->child_elem);
 
-	for(int i = 2; i < MAX_FD; i++) {
-		t->fdt[i] = NULL;
-	}
-	
-	// 동적 할당
-	// 쓰려면 구조체의 배열을 
-	// struct file **fdt;로 바꿔줄 것!
-	// t->fdt = calloc(MAX_FD, sizeof(struct file *)); // fdt 포인터 동적 할당
-    // if (t->fdt == NULL) {
-    //     palloc_free_page(t); // 메모리 해제
-    //     return TID_ERROR; // 할당 실패
-    // }
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES); // 추가
+    if (t->fdt == NULL) // 추가
+        return TID_ERROR; // 추가
 
 	/* 실행 큐에 추가합니다. */
 	// 스레드를 실행 준비 상태로 만든다.
@@ -569,14 +557,15 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->tf.rsp = (uint64_t)t + PGSIZE - sizeof(void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
-	t->exit_status = 0;
 
 	t->init_priority = priority;
-	list_init(&t->donations);
-	list_init(&t->child_list);
+	t->next_fd = 2;
+	list_init(&t->donations);	
+	list_init(&(t->child_list));
+	
 	sema_init(&t->load_sema, 0);
 	sema_init(&t->exit_sema, 0);
-	sema_init(&t->wait_sema, 0);
+    sema_init(&t->wait_sema, 0);
 }
 
 /* 스케줄링될 다음 스레드를 선택하고 반환합니다.

@@ -23,13 +23,12 @@ enum thread_status
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 #define TID_ERROR ((tid_t) - 1) /* Error value for tid_t. */
+#define FDT_PAGES 2
 #define FDT_COUNT_LIMIT 128
 /* Thread priorities. */
 #define PRI_MIN 0	   /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
-
-#define MAX_FD 128 /* fd 최댓값 */
 
 /* A kernel thread or user process.
  *
@@ -102,7 +101,7 @@ struct thread
 	struct list_elem donation_elem;
 
 	// file descriptor 코드
-	struct file *fdt[MAX_FD];
+	struct file **fdt;
 	int next_fd;
 
 	/* Shared between thread.c and synch.c. */
