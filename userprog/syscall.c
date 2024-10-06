@@ -326,12 +326,6 @@ int write(int fd, void *buffer, unsigned size)
 	return bytes_write;
 }
 
-// void seek(int fd, unsigned position)
-// {
-// 	struct file *file = process_get_file(fd);
-// 	file_seek(&file, position);
-// }
-
 void seek(int fd, unsigned position) {
     struct file *file = process_get_file(fd);
     if (file != NULL) {
