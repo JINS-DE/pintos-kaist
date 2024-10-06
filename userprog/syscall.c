@@ -329,7 +329,10 @@ int write(int fd, void *buffer, unsigned size)
 void seek(int fd, unsigned position)
 {
 	struct file *file = process_get_file(fd);
-	file_seek(&file, position);
+	if (file != NULL)
+	{
+		file_seek(file, position);
+	}
 }
 
 unsigned
