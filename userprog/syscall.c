@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 
+#include "threads/palloc.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
@@ -15,6 +16,7 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "threads/synch.h"
+#include "lib/string.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -27,8 +29,8 @@ void close(int fd);
 bool create(const char *file, unsigned initial_size);
 bool remove(const char *file);
 int filesize(int fd);
-int read (int fd, void *buffer, unsigned size);
-int write (int fd, void *buffer, unsigned size);
+int read(int fd, void *buffer, unsigned size);
+int write(int fd, void *buffer, unsigned size);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
 
@@ -66,75 +68,75 @@ void syscall_init(void)
 }
 
 /* The main system call interface */
-void
-syscall_handler (struct intr_frame *f UNUSED) {
+void syscall_handler(struct intr_frame *f UNUSED)
+{
 	// TODO: Your implementation goes here.
 	int sys_number = f->R.rax;
-	switch (sys_number){
+	switch (sys_number)
+	{
 
-		case SYS_HALT:			/* Halt the operating system. */
-			halt();
-			break;
-		
-		case SYS_EXIT:			/* Terminate this process. */
-			exit(f->R.rdi);
-			break;
+	case SYS_HALT: /* Halt the operating system. */
+		halt();
+		break;
 
-		case SYS_FORK:			/* Clone current process. */
-			f->R.rax = fork(f->R.rdi, f);
-			break;
-			                    
-		case SYS_EXEC:			/* Switch current process. */
-			 exec(f->R.rdi) == -1;
-           	 break;
-	
-		case SYS_WAIT:			/* Wait for a child process to die. */
-			 f->R.rax = wait(f->R.rdi);
-			 break; 
+	case SYS_EXIT: /* Terminate this process. */
+		exit(f->R.rdi);
+		break;
 
-	    case SYS_CREATE:		/* Create a file. */
-			 f->R.rax = create(f->R.rdi, f->R.rsi);
-			 break;
+	case SYS_FORK: /* Clone current process. */
+		f->R.rax = fork(f->R.rdi, f);
+		break;
 
-		case SYS_REMOVE:		/* Delete a file. */
-			 f->R.rax = remove(f->R.rdi);
-			 break;
+	case SYS_EXEC: /* Switch current process. */
+		exec(f->R.rdi) == -1;
+		break;
 
-		case SYS_OPEN:			/* Open a file. */
-			 f->R.rax = open(f->R.rdi);
-			 break;	              
-	               
-        case SYS_FILESIZE: 		/* Obtain a file's size. */
-			 f->R.rax = filesize(f->R.rdi);
-			 break;
+	case SYS_WAIT: /* Wait for a child process to die. */
+		f->R.rax = wait(f->R.rdi);
+		break;
 
-	    case SYS_READ:			/* Read from a file. */
-			 f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
-			 break;
-	
-		case SYS_WRITE:			/* Write to a file. */
-			 f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
-			 break;
-	                   
-		case SYS_SEEK:			/* Change position in a file. */
-			 seek(f->R.rdi, f->R.rsi);
-			 break;
-	                  
-        case SYS_TELL:			/* Report current position in a file. */
-			 f->R.rax = tell(f->R.rdi);
-			 break;
-	                   
-		case SYS_CLOSE:			/* Close a file. */
-			 close(f->R.rdi);
-			 break;
+	case SYS_CREATE: /* Create a file. */
+		f->R.rax = create(f->R.rdi, f->R.rsi);
+		break;
 
-		default:
-			// printf ("system call!\n");
-			// thread_exit ();
-			exit(-1);
-			break; 
+	case SYS_REMOVE: /* Delete a file. */
+		f->R.rax = remove(f->R.rdi);
+		break;
+
+	case SYS_OPEN: /* Open a file. */
+		f->R.rax = open(f->R.rdi);
+		break;
+
+	case SYS_FILESIZE: /* Obtain a file's size. */
+		f->R.rax = filesize(f->R.rdi);
+		break;
+
+	case SYS_READ: /* Read from a file. */
+		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+		break;
+
+	case SYS_WRITE: /* Write to a file. */
+		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
+		break;
+
+	case SYS_SEEK: /* Change position in a file. */
+		seek(f->R.rdi, f->R.rsi);
+		break;
+
+	case SYS_TELL: /* Report current position in a file. */
+		f->R.rax = tell(f->R.rdi);
+		break;
+
+	case SYS_CLOSE: /* Close a file. */
+		close(f->R.rdi);
+		break;
+
+	default:
+		// printf ("system call!\n");
+		// thread_exit ();
+		exit(-1);
+		break;
 	}
-	
 }
 
 int wait(int pid)
@@ -162,7 +164,8 @@ void exit(int status)
 	thread_exit();
 }
 
-int exec(char *cmd_line){
+int exec(char *cmd_line)
+{
 	// cmd_line이 유효한 사용자 주소인지 확인 -> 잘못된 주소인 경우 종료/예외 발생
 	check_address(cmd_line);
 
@@ -172,16 +175,14 @@ int exec(char *cmd_line){
 	// 현재 프로세스의 주소 공간을 교체하여 새로운 프로그램을 실행
 	// 이 함수에서는 새 스레드를 생성하지 않고 process_exec을 호출한다.
 
-	
 	// process_exec 함수 안에서 filename을 변경해야 하므로
 	// 커널 메모리 공간에 cmd_line의 복사본을 만든다.
 	// (현재는 const char* 형식이기 때문에 수정할 수 없다.)
 	char *cmd_line_copy;
-	cmd_line_copy = palloc_get_page(0);
+	cmd_line_copy = palloc_get_page(PAL_ZERO);
 	if (cmd_line_copy == NULL)
 		exit(-1);							  // 메모리 할당 실패 시 status -1로 종료한다.
 	strlcpy(cmd_line_copy, cmd_line, PGSIZE); // cmd_line을 복사한다.
-
 
 	// 스레드의 이름을 변경하지 않고 바로 실행한다.
 	if (process_exec(cmd_line_copy) == -1)
@@ -302,7 +303,7 @@ int read(int fd, void *buffer, unsigned size)
 	return bytes_read;
 }
 
- int write(int fd, void *buffer, unsigned size)
+int write(int fd, void *buffer, unsigned size)
 {
 	check_address(buffer);
 	int bytes_write = 0;
@@ -325,25 +326,25 @@ int read(int fd, void *buffer, unsigned size)
 	return bytes_write;
 }
 
-void 
-seek(int fd, unsigned position)
+void seek(int fd, unsigned position)
 {
 	struct file *file = process_get_file(fd);
 	file_seek(&file, position);
 }
 
-unsigned 
-tell (int fd)
+unsigned
+tell(int fd)
 {
 	struct file *file = process_get_file(fd);
 	file_tell(&file);
 }
 
-void
-check_address(void *addr){
+void check_address(void *addr)
+{
 
-if (addr == NULL || !is_user_vaddr(addr)) {
-	//  printf("Invalid address: %p\n", addr);
-    exit(-1);
-}
+	if (addr == NULL || !is_user_vaddr(addr))
+	{
+		//  printf("Invalid address: %p\n", addr);
+		exit(-1);
+	}
 }
