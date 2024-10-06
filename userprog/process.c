@@ -18,6 +18,9 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+
+#include "userprog/syscall.h"
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -253,7 +256,9 @@ int process_exec(void *f_name)
     // ~ Argument Passing
 
     /* And then load the binary */
+	lock_acquire(&filesys_lock);
     success = load(file_name, &_if);
+	lock_release(&filesys_lock);
     // 이진 파일을 디스크에서 메모리로 로드한다.
     // 로드된 후 실행할 메인 함수의 시작 주소 필드 초기화 (if_.rip)
     // user stack의 top 포인터 초기화 (if_.rsp)

@@ -228,10 +228,12 @@ int open(const char *file_opened)
 	{
 		return -1; // 유효하지 않은 파일 이름일 경우
 	}
+	lock_acquire(&filesys_lock);
 	// 파일 열기 시도
 	struct file *cur_file = filesys_open(file_opened);
 	if (cur_file == NULL)
 	{
+		lock_release(&filesys_lock);
 		return -1; // 파일을 열지 못했을 경우
 	}
 	// 현재 스레드의 파일 디스크립터 테이블에 파일 추가
@@ -241,6 +243,7 @@ int open(const char *file_opened)
 	{
 		file_close(cur_file); // 파일 디스크립터 할당에 실패하면 파일을 닫음
 	}
+	lock_release(&filesys_lock);
 	return fd;
 }
 
