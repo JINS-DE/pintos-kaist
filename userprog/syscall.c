@@ -132,8 +132,6 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 
 	default:
-		// printf ("system call!\n");
-		// thread_exit ();
 		exit(-1);
 		break;
 	}
@@ -198,58 +196,59 @@ int exec(char *cmd_line)
 
 bool create(const char *file_created, unsigned initial_size)
 {
-	lock_acquire(&filesys_lock);
 	check_address(file_created);
 	bool success = filesys_create(file_created, initial_size);
-	lock_release(&filesys_lock);
 	return success;
 }
 
 bool remove(const char *file_removed)
 {
-	// 파일이름 유효한지 판단
-	if (file_removed == NULL || strlen(file_removed) == 0)
-	{
-		return false; // 유효하지 않은 파일 이름 처리
-	}
-
-	struct dir *dir = dir_open_root();				 // 루트 디렉터리 열기
-	bool success = dir != NULL						 // 루트 디렉터리를 제대로 열었는지 확인
-				   && dir_remove(dir, file_removed); // 디렉터리에서 파일 제거
-
-	dir_close(dir); // 디렉터리 닫기
+	check_address(file_removed);
+	bool success = filesys_remove(file_removed);
 	return success;
 }
 
 int open(const char *file_opened)
 {
-	// 파일이름 유효한지 판단
-	if (file_opened == NULL || strlen(file_opened) == 0)
-	{
-		return -1; // 유효하지 않은 파일 이름일 경우
-	}
+	// 파일이름이 유효한지 판단한다.
+	check_address(file_opened);
+	
+	// 락을 걸어준다.
+	// 여러 프로세스가 동시에 파일 시스템에 접근하는 것을 막기 위해 락을 건다.
+	// 이 락은 파일을 여는 동안 파일 시스템의 동시 접근을 제어하는 역할을 한다. 
 	lock_acquire(&filesys_lock);
-	// 파일 열기 시도
+	
+	// 파일 열기를 시도한다.
 	struct file *cur_file = filesys_open(file_opened);
+	
+	// 파일 열기를 실패 시
 	if (cur_file == NULL)
 	{
 		lock_release(&filesys_lock);
-		return -1; // 파일을 열지 못했을 경우
+		return -1;
 	}
-	// 현재 스레드의 파일 디스크립터 테이블에 파일 추가
-	struct thread *cur = thread_current();
+	
+	// 현재 스레드의 파일 디스크립터 테이블에 파일을 추가한다.
 	int fd = process_add_file(cur_file);
+	
+	// 파일 디스크립터 할당에 실패하면 파일을 닫는다.
 	if (fd == -1)
 	{
-		file_close(cur_file); // 파일 디스크립터 할당에 실패하면 파일을 닫음
+		file_close(cur_file);
 	}
+	
+	// 처음에 건 락을 해제한다.
 	lock_release(&filesys_lock);
 	return fd;
 }
 
 int filesize(int fd)
 {
+	// 파일 디스크럽터 테이블 fd번째에 있는 파일을 가져온다.
 	struct file *cur_file = process_get_file(fd);
+	
+	// 여기선 check_address()를 쓰면 안 된다.
+	// 파일 디스크럽터 테이블이 커널 영역에 있기 때문이다.
 	if (cur_file == NULL)
 	{
 		return -1;
@@ -257,19 +256,24 @@ int filesize(int fd)
 	return file_length(cur_file);
 }
 
-void close(int fd)
-{
-	process_close_file(fd);
-}
-
 int read(int fd, void *buffer, unsigned size)
 {
+	// STDOUT_FILENO : 1 -> 읽을 수 없다.
+	if(fd == STDOUT_FILENO)
+		return -1;
+	
+	// 버퍼의 주소를 검증한다.
 	check_address(buffer);
-
+	
+	// 데이터를 저장할 위치를 가리킨다.
 	char *ptr = (char *)buffer;
 	int bytes_read = 0;
-
+	
+	// 파일 시스템 작업을 하는 동안, 락을 걸어준다.
+	// 현재 프로세스가 작업을 하는 도중, 다른 프로세스의 접근이 막힌다.
 	lock_acquire(&filesys_lock);
+	
+	// STDIN_FILENO : 0 -> 한 문자씩 입력받아 buffer에 저장한다.
 	if (fd == STDIN_FILENO)
 	{
 		for (int i = 0; i < size; i++)
@@ -277,78 +281,93 @@ int read(int fd, void *buffer, unsigned size)
 			*ptr++ = input_getc();
 			bytes_read++;
 		}
-		lock_release(&filesys_lock);
 	}
+	// 표준 입력이 아닌 경우
+	// 파일 디스크립터에 연결된 파일을 가져온다.
+	// file_read(file, buffer, size)로, buffer로 읽어온다. 
 	else
 	{
-		if (fd < 2)
-		{
-
-			lock_release(&filesys_lock);
-			return -1;
-		}
 		struct file *file = process_get_file(fd);
 		if (file == NULL)
 		{
-
 			lock_release(&filesys_lock);
 			return -1;
 		}
-		// struct page *page = spt_find_page(&thread_current()->spt, buffer);
-		// if (page && !page->writable)
-		// {
-		// 	lock_release(&filesys_lock);
-		// 	exit(-1);
-		// }
 		bytes_read = file_read(file, buffer, size);
-		lock_release(&filesys_lock);
 	}
+	
+	// 락을 풀어주고, bytes_read를 반환한다.
+	lock_release(&filesys_lock);
 	return bytes_read;
 }
 
 int write(int fd, void *buffer, unsigned size)
 {
+	// STDIN_FILENO : 0 -> 쓸 수 없다.
+	if (fd == STDIN_FILENO)
+		return -1;
+
+	// 버퍼의 주소를 검증한다.
 	check_address(buffer);
 	int bytes_write = 0;
+
+	// 파일 시스템 작업을 하는 동안, 락을 걸어준다.
+	// 현재 프로세스가 작업을 하는 도중, 다른 프로세스의 접근이 막힌다.
+	lock_acquire(&filesys_lock);
+
+	// STDOUT_FILENO : 1 -> size 만큼 buffer에 저장한다.
 	if (fd == STDOUT_FILENO)
 	{
 		putbuf(buffer, size);
 		bytes_write = size;
 	}
+	// 표준 출력이 아닌 경우
+	// 파일 디스크립터에 연결된 파일을 가져온다.
+	// file_write(file, buffer, size)로, buffer에 있는 데이터를 file에 쓴다. 
 	else
 	{
-		if (fd < 2)
-			return -1;
 		struct file *file = process_get_file(fd);
 		if (file == NULL)
+		{
+			lock_release(&filesys_lock);
 			return -1;
-		lock_acquire(&filesys_lock);
+		}
 		bytes_write = file_write(file, buffer, size);
-		lock_release(&filesys_lock);
 	}
+	// 락을 풀어주고, bytes_write를 반환한다.
+	lock_release(&filesys_lock);
 	return bytes_write;
 }
 
-void seek(int fd, unsigned position) {
+
+void seek(int fd, unsigned position) 
+{
+	// 파일 디스크립터에 연결된 파일을 가져온다.
     struct file *file = process_get_file(fd);
-    if (file != NULL) {
+    if (file != NULL)
+		// file.c의 file_seek()를 활용한다.
         file_seek(file, position);
-    }
 }
 
-unsigned
-tell(int fd)
+unsigned tell(int fd)
 {
+	// 파일 디스크립터에 연결된 파일을 가져온다.
 	struct file *file = process_get_file(fd);
-	file_tell(&file);
+	if (file != NULL)
+		// file.c의 file_tell()을 활용한다.
+		file_tell(file);
+}
+
+void close(int fd)
+{
+	// 프로세스에서 fd로 열려있는 파일을 닫는다.
+	process_close_file(fd);
 }
 
 void check_address(void *addr)
 {
-
 	if (addr == NULL || !is_user_vaddr(addr))
 	{
-		//  printf("Invalid address: %p\n", addr);
 		exit(-1);
 	}
 }
