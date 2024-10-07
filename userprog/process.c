@@ -38,8 +38,6 @@ process_init(void)
 	struct thread *current = thread_current();
 }
 
-
-
 /* "initd"라는 첫 번째 사용자 프로그램을 FILE_NAME에서 로드하여 시작합니다.
  * 새 스레드는 process_create_initd()가 반환되기 전에 스케줄링될 수 있으며,
  * 심지어 종료될 수도 있습니다. initd의 스레드 ID를 반환하거나, 스레드를
@@ -346,9 +344,18 @@ void process_exit(void)
     struct thread *cur = thread_current();
 
     // 1) FDT의 모든 파일을 닫고 메모리를 반환한다.
-    for (int i = 2; i < FDT_COUNT_LIMIT; i++)
-        close(i);
-    palloc_free_page(cur->fdt);
+    // for (int i = 2; i < FDT_COUNT_LIMIT; i++)
+    //     close(i);
+    // palloc_free_page(cur->fdt);
+
+	//@@@
+    // 1) FDT의 모든 파일을 닫고 메모리를 반환한다.
+    for (int i = 2; i < FDT_COUNT_LIMIT; i++) {
+        process_close_file(i); // 각 파일 디스크립터 닫기
+    }
+	
+	palloc_free_multiple(cur->fdt, FDT_PAGES);
+	//@@@
     
 	file_close(cur->running); // 2) 현재 실행 중인 파일도 닫는다.
     process_cleanup();
@@ -644,13 +651,27 @@ struct file *process_get_file(int fd)
 	return fdt[fd];
 }
 
+// void process_close_file(int fd)
+// {
+// 	struct thread *curr = thread_current();
+// 	struct file **fdt = curr->fdt;
+// 	if (fd < 2 || fd >= FDT_COUNT_LIMIT)
+// 		return NULL;
+	
+// 	fdt[fd] = NULL;
+// }
 void process_close_file(int fd)
 {
-	struct thread *curr = thread_current();
-	struct file **fdt = curr->fdt;
-	if (fd < 2 || fd >= FDT_COUNT_LIMIT)
-		return NULL;
-	fdt[fd] = NULL;
+    struct thread *curr = thread_current();
+    struct file **fdt = curr->fdt;
+    if (fd < 2 || fd >= FDT_COUNT_LIMIT)
+        return;
+
+    if (fdt[fd] != NULL)
+    {
+        file_close(fdt[fd]);  // 파일 닫기
+        fdt[fd] = NULL;       // 파일 테이블에서 제거
+    }
 }
 
 #ifndef VM

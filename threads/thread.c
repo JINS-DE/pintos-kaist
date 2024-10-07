@@ -239,9 +239,12 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 	// 현재 스레드의 자식으로 추가
     list_push_back(&thread_current()->child_list, &t->child_elem);
 
-	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES); // 추가
-    if (t->fdt == NULL) // 추가
-        return TID_ERROR; // 추가
+	// 파일 디스크립터 테이블을 초기화해준다.
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+    if (t->fdt == NULL) {
+		palloc_free_page(t); // @@@ 추가
+        return TID_ERROR;
+	}
 
 	/* 실행 큐에 추가합니다. */
 	// 스레드를 실행 준비 상태로 만든다.
