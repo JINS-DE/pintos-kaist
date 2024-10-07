@@ -239,10 +239,10 @@ tid_t thread_create(const char *name, int priority, thread_func *function, void 
 	// 현재 스레드의 자식으로 추가
     list_push_back(&thread_current()->child_list, &t->child_elem);
 
-	// 파일 디스크립터 테이블을 초기화해준다.
+	/* 파일 디스크립터 테이블을 초기화해준다. */
 	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
     if (t->fdt == NULL) {
-		palloc_free_page(t); // @@@ 추가
+		palloc_free_multiple(t->fdt, FDT_PAGES);
         return TID_ERROR;
 	}
 
@@ -562,13 +562,16 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->magic = THREAD_MAGIC;
 
 	t->init_priority = priority;
-	t->next_fd = 2;
+	
 	list_init(&t->donations);	
 	list_init(&(t->child_list));
 	
 	sema_init(&t->load_sema, 0);
 	sema_init(&t->exit_sema, 0);
     sema_init(&t->wait_sema, 0);
+
+	/* 다음 fd값을 2로 설정한다. */
+	t->next_fd = 2;
 }
 
 /* 스케줄링될 다음 스레드를 선택하고 반환합니다.
@@ -760,27 +763,6 @@ void donate_priority()
 		depth++;
 	}
 }
-// void donate_priority()
-// {
-// 	struct thread *current_thread = thread_current();
-// 	int nested_depth = 8; // 기부의 최대 깊이
-// 	int cnt = 0;
-
-// 	while (current_thread->wait_on_lock != NULL && cnt < nested_depth)
-// 	{
-// 		struct thread *holder = current_thread->wait_on_lock->holder;
-
-// 		// 기부받는 스레드의 우선순위를 업데이트
-// 		if (holder->priority < current_thread->priority)
-// 		{
-// 			holder->priority = current_thread->priority;
-// 		}
-
-// 		// 다음 스레드로 이동 (현재 락을 보유한 스레드)
-// 		current_thread = holder;
-// 		cnt++;
-// 	}
-// }
 
 void remove_with_lock(struct lock *lock)
 {

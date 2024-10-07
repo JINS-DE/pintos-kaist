@@ -343,21 +343,15 @@ void process_exit(void)
 {
     struct thread *cur = thread_current();
 
-    // 1) FDT의 모든 파일을 닫고 메모리를 반환한다.
-    // for (int i = 2; i < FDT_COUNT_LIMIT; i++)
-    //     close(i);
-    // palloc_free_page(cur->fdt);
-
-	//@@@
-    // 1) FDT의 모든 파일을 닫고 메모리를 반환한다.
+    // 1) FDT의 모든 파일을 닫는다.
     for (int i = 2; i < FDT_COUNT_LIMIT; i++) {
-        process_close_file(i); // 각 파일 디스크립터 닫기
+        process_close_file(i);
     }
-	
+	// FDT의 메모리를 반환한다.
 	palloc_free_multiple(cur->fdt, FDT_PAGES);
-	//@@@
     
-	file_close(cur->running); // 2) 현재 실행 중인 파일도 닫는다.
+	// 2) 현재 실행 중인 파일도 닫는다.
+	file_close(cur->running); 
     process_cleanup();
 
     // 3) 자식이 종료될 때까지 대기하고 있는 부모에게 signal을 보낸다.
@@ -630,13 +624,18 @@ int process_add_file(struct file *f)
 	struct thread *curr = thread_current();
 	struct file **fdt = curr->fdt;
 
-	// limit을 넘지 않는 범위 안에서 빈 자리 탐색
+	// FDT_COUNT_LIMIT를 넘지 않는 범위 안에서 빈 자리룰 탐색한다.
 	while (curr->next_fd < FDT_COUNT_LIMIT && fdt[curr->next_fd])
 		curr->next_fd++;
+	
+	// curr->next_fd가 FDT_COUNT_LIMIT보다 크거나 같다 : 빈 자리가 없다.
 	if (curr->next_fd >= FDT_COUNT_LIMIT)
 		return -1;
+	
+	// 빈 자리가 있다면 그곳에 파일 f를 저장한다.
 	fdt[curr->next_fd] = f;
 
+	// 저장된 파일의 fd를 반환한다.
 	return curr->next_fd;
 }
 
@@ -644,33 +643,31 @@ struct file *process_get_file(int fd)
 {
 	struct thread *curr = thread_current();
 	struct file **fdt = curr->fdt;
-	/* 파일 디스크립터에 해당하는 파일 객체를 리턴 */
-	/* 없을 시 NULL 리턴 */
+
+	// 파일 디스크럽터가 2보다 작다 : 표준 입출력 -> 가져올 수 없다.
+	// 파일 디스크럽터가 FDT_COUNT_LIMIT보다 크거나 같다 : 잘못된 fd
 	if (fd < 2 || fd >= FDT_COUNT_LIMIT)
 		return NULL;
+	
+	// 파일 디스크럽터에 해당하는 파일 객체를 반환한다.
 	return fdt[fd];
 }
 
-// void process_close_file(int fd)
-// {
-// 	struct thread *curr = thread_current();
-// 	struct file **fdt = curr->fdt;
-// 	if (fd < 2 || fd >= FDT_COUNT_LIMIT)
-// 		return NULL;
-	
-// 	fdt[fd] = NULL;
-// }
 void process_close_file(int fd)
 {
     struct thread *curr = thread_current();
     struct file **fdt = curr->fdt;
+
+	// 파일 디스크럽터가 2보다 작다 : 표준 입출력 -> 가져올 수 없다.
+	// 파일 디스크럽터가 FDT_COUNT_LIMIT보다 크거나 같다 : 잘못된 fd
     if (fd < 2 || fd >= FDT_COUNT_LIMIT)
         return;
 
+	// fdt 안에 해당 파일이 존재하면,
     if (fdt[fd] != NULL)
     {
-        file_close(fdt[fd]);  // 파일 닫기
-        fdt[fd] = NULL;       // 파일 테이블에서 제거
+        file_close(fdt[fd]);  // 해당 파일을 닫는다.
+        fdt[fd] = NULL;       // 파일 디스크럽터에서 해당 파일을 지운다.
     }
 }
 
