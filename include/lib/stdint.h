@@ -3,19 +3,19 @@
 
 typedef signed char int8_t;
 #define INT8_MAX 127
-#define INT8_MIN ( -INT8_MAX - 1 )
+#define INT8_MIN (-INT8_MAX - 1)
 
 typedef signed short int int16_t;
 #define INT16_MAX 32767
-#define INT16_MIN ( -INT16_MAX - 1 )
+#define INT16_MIN (-INT16_MAX - 1)
 
 typedef signed int int32_t;
 #define INT32_MAX 2147483647
-#define INT32_MIN ( -INT32_MAX - 1 )
+#define INT32_MIN (-INT32_MAX - 1)
 
 typedef signed long long int int64_t;
 #define INT64_MAX 9223372036854775807LL
-#define INT64_MIN ( -INT64_MAX - 1 )
+#define INT64_MIN (-INT64_MAX - 1)
 
 typedef unsigned char uint8_t;
 #define UINT8_MAX 255
