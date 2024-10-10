@@ -175,19 +175,6 @@ vm_do_claim_page (struct page *page) {
 
 /* Initialize new supplemental page table */
 
-// 해시 함수
-uint64_t vm_hash_func(const struct hash_elem *e, void *aux) {
-    struct vm_entry *i = hash_entry(e, struct vm_entry, elem);
-    return hash_int(i->vaddr);
-}
-
-// 비교 함수
-bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux) {
-    struct vm_entry *item_a = hash_entry(a, struct vm_entry, elem);
-    struct vm_entry *item_b = hash_entry(b, struct vm_entry, elem);
-    return item_a->vaddr < item_b->vaddr; 
-}
-
 struct vm_entry *find_vme(void *vaddr)
 {
     struct supplemental_page_table *spt = &(thread_current()->spt);
@@ -204,7 +191,7 @@ struct vm_entry *find_vme(void *vaddr)
 
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
-	bool success = hash_init(&spt->vm, vm_hash_func, vm_less_func, NULL);
+	
 }
 
 /* Copy supplemental page table from src to dst */
