@@ -115,10 +115,10 @@ enum vm_type page_get_type (struct page *page);
 
 
 // ================ NEW ================
-uint64_t vm_hash_func(const struct hash_elem *e, void *aux);
-bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux);
-bool delete_vme(struct hash *vm, struct vm_entry *vme);
-void destructor_per_elem(struct hash_elem *e, void *aux);
-void vm_destroy(struct hash *vm);
+// uint64_t vm_hash_func(const struct hash_elem *e, void *aux);
+// bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux);
+// int delete_vme(struct hash *vm, struct vm_entry *vme);
+// void destructor_per_elem(struct hash_elem *e, void *aux);
+// void vm_destroy(struct hash *vm);
 
 #endif  /* VM_VM_H */
