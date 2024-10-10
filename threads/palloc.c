@@ -124,7 +124,10 @@ static void populate_pools( struct area *base_mem, struct area *ext_mem ) {
     uint64_t kern_pages = total_pages - user_pages;
 
     // Parse E820 map to claim the memory region for each pool.
-    enum { KERN_START, KERN, USER_START, USER } state = KERN_START;
+    enum { KERN_START,
+           KERN,
+           USER_START,
+           USER } state = KERN_START;
     uint64_t rem = kern_pages;
     uint64_t region_start = 0, end = 0, start, size, size_in_pg;
 
