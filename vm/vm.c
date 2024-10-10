@@ -208,7 +208,6 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 }
 
 
-
 bool insert_vme (struct hash *vm, struct vm_entry
 *vme){
 	// hash_insert 함수가 NULL이 아닌 값을 반환하면,
