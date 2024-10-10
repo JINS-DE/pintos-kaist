@@ -203,7 +203,7 @@ bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b, void *au
 }
 
 bool delete_vme(struct hash *vm, struct vm_entry *vme){
-	struct hash_elem * found = hash_delete(vm, vme);
+	struct hash_elem * found = hash_delete(vm, &vme->elem);
 
 	if(found != NULL) return true;
 	else return false;
