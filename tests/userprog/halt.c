@@ -3,7 +3,9 @@
 #include "tests/lib.h"
 #include "tests/main.h"
 
-void test_main( void ) {
-    halt();
-    fail( "should have halted" );
+void
+test_main (void) 
+{
+  halt ();
+  fail ("should have halted");
 }
