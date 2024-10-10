@@ -31,6 +31,8 @@ enum vm_type {
 #include "filesys/page_cache.h"
 #endif
 
+#include "hash.h"
+
 struct page_operations;
 struct thread;
 
@@ -84,7 +86,9 @@ struct page_operations {
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
-struct supplemental_page_table {
+struct supplemental_page_table { 
+	// = virtual address space
+	struct hash vm;
 };
 
 #include "threads/thread.h"

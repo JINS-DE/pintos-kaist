@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "hash.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -172,8 +173,38 @@ vm_do_claim_page (struct page *page) {
 }
 
 /* Initialize new supplemental page table */
+
+// 예시 구조체
+struct vm_entry {
+    uint8_t type;
+    void *vaddr;
+    bool writable;
+    bool is_loaded;
+    struct file *file;
+    struct list_elem mmap_elem;
+    size_t offset;
+    size_t read_bytes;
+    size_t zero_bytes;
+    size_t swap_slot;
+    struct hash_elem elem;
+};
+
+// 해시 함수
+uint64_t vm_hash_func(const struct hash_elem *e, void *aux) {
+    struct vm_entry *i = hash_entry(e, struct vm_entry, elem);
+    return hash_int(i->vaddr);
+}
+
+// 비교 함수
+bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux) {
+    struct vm_entry *item_a = hash_entry(a, struct vm_entry, elem);
+    struct vm_entry *item_b = hash_entry(b, struct vm_entry, elem);
+    return item_a->vaddr < item_b->vaddr; 
+}
+
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	bool success = hash_init(&spt->vm, vm_hash_func, vm_less_func, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
