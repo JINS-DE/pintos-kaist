@@ -1,6 +1,7 @@
 /* vm.c: Generic interface for virtual memory objects. */
 
 #include "threads/malloc.h"
+#include "threads/vaddr.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "hash.h"
@@ -174,6 +175,7 @@ vm_do_claim_page (struct page *page) {
 
 /* Initialize new supplemental page table */
 
+
 // 예시 구조체
 struct vm_entry {
     uint8_t type;
@@ -218,4 +220,20 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+}
+
+
+struct vm_entry *find_vme(void *vaddr)
+{
+    struct supplemental_page_table *spt = &(thread_current()->spt);
+    uint64_t page_num = pg_round_down(vaddr);
+	struct vm_entry temp_entry;
+    temp_entry.vaddr = vaddr; 
+
+    struct hash_elem* found = hash_find(&spt->vm, &temp_entry.elem);
+
+    if (hash_empty(found))
+        return NULL;
+    return hash_entry(found, struct vm_entry, elem);
+  
 }
