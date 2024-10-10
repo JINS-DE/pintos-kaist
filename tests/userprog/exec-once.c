@@ -4,9 +4,7 @@
 #include "tests/lib.h"
 #include "tests/main.h"
 
-void
-test_main (void) 
-{
-  msg ("I'm your father");
-  exec ("child-simple");
+void test_main( void ) {
+    msg( "I'm your father" );
+    exec( "child-simple" );
 }

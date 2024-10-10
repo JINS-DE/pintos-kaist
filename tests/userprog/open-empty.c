@@ -4,10 +4,7 @@
 #include "tests/lib.h"
 #include "tests/main.h"
 
-void
-test_main (void) 
-{
-  int handle = open ("");
-  if (handle != -1)
-    fail ("open() returned %d instead of -1", handle);
+void test_main( void ) {
+    int handle = open( "" );
+    if ( handle != -1 ) fail( "open() returned %d instead of -1", handle );
 }
