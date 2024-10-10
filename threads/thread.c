@@ -422,7 +422,8 @@ int thread_get_priority( void ) { return thread_current()->priority; }
 // 높은 "nice" 값은 스레드가 CPU를 덜 받도록 하고,
 // 낮은 값은 더 받도록 합니다
 // nice 높을수록 양보하는 성질
-void thread_set_nice( int nice UNUSED ) { /* TODO: 구현하세요 */ }
+void thread_set_nice( int nice UNUSED ) { /* TODO: 구현하세요 */
+}
 
 /* 현재 스레드의 nice 값을 반환합니다. */
 // nice :  CPU 점유율을 조정
@@ -476,7 +477,10 @@ static void idle( void *idle_started_ UNUSED ) {
 
            [IA32-v2a] "HLT", [IA32-v2b] "STI" 및 [IA32-v3a]
            7.11.1 "HLT Instruction"을 참조하세요. */
-        asm volatile( "sti; hlt" : : : "memory" );
+        asm volatile( "sti; hlt"
+                      :
+                      :
+                      : "memory" );
     }
 }
 

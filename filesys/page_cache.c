@@ -16,7 +16,8 @@ static const struct page_operations page_cache_op = {
 tid_t page_cache_workerd;
 
 /* The initializer of file vm */
-void pagecache_init( void ) { /* TODO: Create a worker daemon for page cache with page_cache_kworkerd */ }
+void pagecache_init( void ) { /* TODO: Create a worker daemon for page cache with page_cache_kworkerd */
+}
 
 /* Initialize the page cache */
 bool page_cache_initializer( struct page *page, enum vm_type type, void *kva ) {

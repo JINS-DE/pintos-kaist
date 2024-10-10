@@ -43,19 +43,37 @@ struct keymap {
    the Shift keys are down.  Case of letters is an exception
    that we handle elsewhere.  */
 static const struct keymap invariant_keymap[] = {
-    { 0x01, "\033" }, { 0x0e, "\b" }, { 0x0f, "\tQWERTYUIOP" }, { 0x1c, "\r" }, { 0x1e, "ASDFGHJKL" }, { 0x2c, "ZXCVBNM" }, { 0x37, "*" }, { 0x39, " " }, { 0, NULL },
+    { 0x01, "\033" },
+    { 0x0e, "\b" },
+    { 0x0f, "\tQWERTYUIOP" },
+    { 0x1c, "\r" },
+    { 0x1e, "ASDFGHJKL" },
+    { 0x2c, "ZXCVBNM" },
+    { 0x37, "*" },
+    { 0x39, " " },
+    { 0, NULL },
 };
 
 /* Characters for keys pressed without Shift, for those keys
    where it matters. */
 static const struct keymap unshifted_keymap[] = {
-    { 0x02, "1234567890-=" }, { 0x1a, "[]" }, { 0x27, ";'`" }, { 0x2b, "\\" }, { 0x33, ",./" }, { 0, NULL },
+    { 0x02, "1234567890-=" },
+    { 0x1a, "[]" },
+    { 0x27, ";'`" },
+    { 0x2b, "\\" },
+    { 0x33, ",./" },
+    { 0, NULL },
 };
 
 /* Characters for keys pressed with Shift, for those keys where
    it matters. */
 static const struct keymap shifted_keymap[] = {
-    { 0x02, "!@#$%^&*()_+" }, { 0x1a, "{}" }, { 0x27, ":\"~" }, { 0x2b, "|" }, { 0x33, "<>?" }, { 0, NULL },
+    { 0x02, "!@#$%^&*()_+" },
+    { 0x1a, "{}" },
+    { 0x27, ":\"~" },
+    { 0x2b, "|" },
+    { 0x33, "<>?" },
+    { 0, NULL },
 };
 
 static bool map_key( const struct keymap[], unsigned scancode, uint8_t * );
@@ -119,7 +137,13 @@ static void keyboard_interrupt( struct intr_frame *args UNUSED ) {
 
         /* Table of shift keys. */
         static const struct shift_key shift_keys[] = {
-            { 0x2a, &left_shift }, { 0x36, &right_shift }, { 0x38, &left_alt }, { 0xe038, &right_alt }, { 0x1d, &left_ctrl }, { 0xe01d, &right_ctrl }, { 0, NULL },
+            { 0x2a, &left_shift },
+            { 0x36, &right_shift },
+            { 0x38, &left_alt },
+            { 0xe038, &right_alt },
+            { 0x1d, &left_ctrl },
+            { 0xe01d, &right_ctrl },
+            { 0, NULL },
         };
 
         const struct shift_key *key;

@@ -38,14 +38,14 @@
 /* 게이트 디스크립터를 정의하는 구조체 : */
 /* 인터럽트 디스크립터 테이블(IDT, Interrupt Descriptor Table)**의 항목을 구성하는 데 사용되며, 인터럽트나 예외가 발생했을 때 해당 핸들러의 주소와 관련된 메타데이터를 포함 */
 struct gate {
-    unsigned off_15_0 : 16;  // low 16 bits of offset in segment - [게이트에 등록된 핸들러의 주소의 하위 16비트를 저장]
-    unsigned ss : 16;        // segment selector - [핸들러 코드가 위치한 세그먼트 선택자]
-    unsigned ist : 3;        // # args, 0 for interrupt/trap gates - [Interrupt Stack Table(IST) 인덱스를 나타냄. 특정 인터럽트를 처리할 때 사용할 스택을 선택]
-    unsigned rsv1 : 5;       // reserved(should be zero I guess) - [예약된 필드로, 항상 0이어야 합니다]
-    unsigned type : 4;       // type(STS_{TG,IG32,TG32}) - [게이트의 타입. STS_TG, STS_IG32, STS_TG32 등. 주로 인터럽트 게이트(0xE), 트랩 게이트(0xF)가 사용]
-    unsigned s : 1;    // must be 0 (system) - [시스템 플래그로, 항상 0, 게이트 디스크립터는 시스템 디스크립터로 취급되므로, 이 필드는 반드시 0이어야 함.]
-    unsigned dpl : 2;  // descriptor(meaning new) privilege level - [DPL, 인터럽트 게이트에 접근할 수 있는 권한 레벨을 결정 (0이 가장 높음, 3이 가장 낮음)]
-    unsigned p : 1;    // Present - [Present 플래그로, 게이트가 사용 가능한지 여부를 나타냅니다. 이 값이 1이면 게이트가 유효하며, 0이면 무효]
+    unsigned off_15_0 : 16;   // low 16 bits of offset in segment - [게이트에 등록된 핸들러의 주소의 하위 16비트를 저장]
+    unsigned ss : 16;         // segment selector - [핸들러 코드가 위치한 세그먼트 선택자]
+    unsigned ist : 3;         // # args, 0 for interrupt/trap gates - [Interrupt Stack Table(IST) 인덱스를 나타냄. 특정 인터럽트를 처리할 때 사용할 스택을 선택]
+    unsigned rsv1 : 5;        // reserved(should be zero I guess) - [예약된 필드로, 항상 0이어야 합니다]
+    unsigned type : 4;        // type(STS_{TG,IG32,TG32}) - [게이트의 타입. STS_TG, STS_IG32, STS_TG32 등. 주로 인터럽트 게이트(0xE), 트랩 게이트(0xF)가 사용]
+    unsigned s : 1;           // must be 0 (system) - [시스템 플래그로, 항상 0, 게이트 디스크립터는 시스템 디스크립터로 취급되므로, 이 필드는 반드시 0이어야 함.]
+    unsigned dpl : 2;         // descriptor(meaning new) privilege level - [DPL, 인터럽트 게이트에 접근할 수 있는 권한 레벨을 결정 (0이 가장 높음, 3이 가장 낮음)]
+    unsigned p : 1;           // Present - [Present 플래그로, 게이트가 사용 가능한지 여부를 나타냅니다. 이 값이 1이면 게이트가 유효하며, 0이면 무효]
     unsigned off_31_16 : 16;  // high bits of offset in segment - [핸들러 주소의 중간 16비트를 저장]
     uint32_t off_32_63;       // 핸들러 주소의 상위 32비트를 저장합니다. x86-64 환경에서 전체 64비트 주소를 표현하기 위해 사용
     uint32_t rsv2;            // 예약된 필드로, 항상 0이어야 합니다.
@@ -126,7 +126,8 @@ intr_get_level( void ) {
     /*  pushfq: 플래그 레지스터의 값을 스택에 푸시(push)합니다. 이는 현재의 CPU 플래그 상태를 저장합니다.
             popq %0: 스택에서 값을 팝(pop)하여 flags 변수에 저장합니다. %0는 C 변수에 대응되는 자리표시자로, flags에 대한 참조입니다.
             volatile: 컴파일러에게 이 코드는 최적화하지 말라는 지시입니다. 이는 어셈블리 코드가 반드시 실행되어야 함을 보장합니다. */
-    asm volatile( "pushfq; popq %0" : "=g"( flags ) );
+    asm volatile( "pushfq; popq %0"
+                  : "=g"( flags ) );
 
     return flags & FLAG_IF ? INTR_ON : INTR_OFF;
 }
@@ -166,7 +167,10 @@ enum intr_level intr_disable( void ) {
     /* Disable interrupts by clearing the interrupt flag.
        See [IA32-v2b] "CLI" and [IA32-v3a] 5.8.1 "Masking Maskable
        Hardware Interrupts". */
-    asm volatile( "cli" : : : "memory" );  // 어셈블리 명령어는 Interrupt Flag를 클리어하여 마스크 가능한 인터럽트를 비활성화
+    asm volatile( "cli"
+                  :
+                  :
+                  : "memory" );  // 어셈블리 명령어는 Interrupt Flag를 클리어하여 마스크 가능한 인터럽트를 비활성화
 
     return old_level;
 }
@@ -271,7 +275,7 @@ static void register_handler( uint8_t vec_no, int dpl, enum intr_level level, in
              intr_handler_func *handler: 인터럽트가 발생했을 때 호출될 핸들러 함수의 포인터입니다.
              const char *name: 인터럽트에 대한 설명 문자열로, 디버깅이나 로깅 목적으로 사용됩니다. */
 void intr_register_ext( uint8_t vec_no, intr_handler_func *handler, const char *name ) {
-    ASSERT( vec_no >= 0x20 && vec_no <= 0x2f );  // vec_no가 0x20에서 0x2f(즉, 32에서 47) 사이에 있는지 확인합니다. 이 범위는 PIC(Priority Interrupt Controller)가 관리하는 외부 인터럽트를 나타냅니다
+    ASSERT( vec_no >= 0x20 && vec_no <= 0x2f );              // vec_no가 0x20에서 0x2f(즉, 32에서 47) 사이에 있는지 확인합니다. 이 범위는 PIC(Priority Interrupt Controller)가 관리하는 외부 인터럽트를 나타냅니다
     register_handler( vec_no, 0, INTR_OFF, handler, name );  // register_handler 함수를 호출하여 핸들러를 등록
 }
 
