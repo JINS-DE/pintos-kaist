@@ -202,6 +202,18 @@ bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b, void *au
     return item_a->vaddr < item_b->vaddr; 
 }
 
+bool delete_vme(struct hash *vm, struct vm_entry *vme){
+	hash_delete(vm, vme);
+}
+
+void destructor_per_elem(struct hash_elem *e, void *aux){
+	free(e);
+}
+
+void vm_destory(struct hash *vm){
+	hash_destroy(vm, &destructor_per_elem);
+}
+
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	bool success = hash_init(&spt->vm, vm_hash_func, vm_less_func, NULL);
