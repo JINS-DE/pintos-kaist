@@ -207,6 +207,22 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	bool success = hash_init(&spt->vm, vm_hash_func, vm_less_func, NULL);
 }
 
+
+
+bool insert_vme (struct hash *vm, struct vm_entry
+*vme){
+	// hash_insert 함수가 NULL이 아닌 값을 반환하면,
+    // 즉 기존에 같은 요소가 있으면 true 반환.
+    // 기존에 같은 요소가 없다면 삽입 후 NULL 반환하므로 false 반환.
+	if(hash_insert(vm, &(vme->elem))==NULL){
+		return true;
+	} else {
+		return false;
+	}
+}
+
+
+
 /* Copy supplemental page table from src to dst */
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
