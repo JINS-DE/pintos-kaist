@@ -2,11 +2,8 @@
    which must return failure. */
 
 #include <syscall.h>
+
 #include "tests/lib.h"
 #include "tests/main.h"
 
-void
-test_main (void) 
-{
-  CHECK (!mkdir (""), "mkdir \"\" (must return false)");
-}
+void test_main( void ) { CHECK( !mkdir( "" ), "mkdir \"\" (must return false)" ); }
