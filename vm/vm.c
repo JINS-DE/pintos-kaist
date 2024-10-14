@@ -153,60 +153,7 @@ static bool vm_do_claim_page( struct page *page ) {
 }
 
 /* Initialize new supplemental page table */
-
-// 예시 구조체
-struct vm_entry {
-    uint8_t type;
-    void *vaddr;
-    bool writable;
-    bool is_loaded;
-    struct file *file;
-    struct list_elem mmap_elem;
-    size_t offset;
-    size_t read_bytes;
-    size_t zero_bytes;
-    size_t swap_slot;
-    struct hash_elem elem;
-};
-
-// 해시 함수
-uint64_t vm_hash_func( const struct hash_elem *e, void *aux ) {
-    struct vm_entry *i = hash_entry( e, struct vm_entry, elem );
-    return hash_int( i->vaddr );
-}
-
-// 비교 함수
-bool vm_less_func( const struct hash_elem *a, const struct hash_elem *b, void *aux ) {
-    struct vm_entry *item_a = hash_entry( a, struct vm_entry, elem );
-    struct vm_entry *item_b = hash_entry( b, struct vm_entry, elem );
-    return item_a->vaddr < item_b->vaddr;
-}
-
-bool delete_vme( struct hash *vm, struct vm_entry *vme ) {
-    struct hash_elem *found = hash_delete( vm, &vme->elem );
-
-    if ( found != NULL )
-        return true;
-    else
-        return false;
-}
-
-void destructor_per_elem( struct hash_elem *e, void *aux ) { free( e ); }
-
-void vm_destory( struct hash *vm ) { hash_destroy( vm, &destructor_per_elem ); }
-
-void supplemental_page_table_init( struct supplemental_page_table *spt UNUSED ) { bool success = hash_init( &spt->vm, vm_hash_func, vm_less_func, NULL ); }
-
-bool insert_vme( struct hash *vm, struct vm_entry *vme ) {
-    // hash_insert 함수가 NULL이 아닌 값을 반환하면,
-    // 즉 기존에 같은 요소가 있으면 true 반환.
-    // 기존에 같은 요소가 없다면 삽입 후 NULL 반환하므로 false 반환.
-    if ( hash_insert( vm, &( vme->elem ) ) == NULL ) {
-        return true;
-    } else {
-        return false;
-    }
-}
+void supplemental_page_table_init( struct supplemental_page_table *spt UNUSED ) {}
 
 /* Copy supplemental page table from src to dst */
 bool supplemental_page_table_copy( struct supplemental_page_table *dst UNUSED, struct supplemental_page_table *src UNUSED ) {}
@@ -215,16 +162,4 @@ bool supplemental_page_table_copy( struct supplemental_page_table *dst UNUSED, s
 void supplemental_page_table_kill( struct supplemental_page_table *spt UNUSED ) {
     /* TODO: Destroy all the supplemental_page_table hold by thread and
      * TODO: writeback all the modified contents to the storage. */
-}
-
-struct vm_entry *find_vme( void *vaddr ) {
-    struct supplemental_page_table *spt = &( thread_current()->spt );
-    uint64_t page_num = pg_round_down( vaddr );
-    struct vm_entry temp_entry;
-    temp_entry.vaddr = vaddr;
-
-    struct hash_elem *found = hash_find( &spt->vm, &temp_entry.elem );
-
-    if ( hash_empty( found ) ) return NULL;
-    return hash_entry( found, struct vm_entry, elem );
 }
