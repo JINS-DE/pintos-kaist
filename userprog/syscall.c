@@ -18,9 +18,12 @@
 #include "threads/synch.h"
 #include "lib/string.h"
 
+#include "vm/vm.h"
+
 void syscall_entry( void );
 void syscall_handler( struct intr_frame * );
-void check_address( void *addr );
+struct page *check_address( void *addr );
+void check_valid_buffer( void *buffer, size_t size, bool writable );
 void halt( void );
 void exit( int status );
 int fork( const char *thread_name, struct intr_frame *f );
@@ -235,7 +238,7 @@ int read( int fd, void *buffer, unsigned size ) {
     if ( fd == STDOUT_FILENO ) return -1;
 
     // 버퍼의 주소를 검증한다.
-    check_address( buffer );
+    check_valid_buffer( buffer, size, true );
 
     // 데이터를 저장할 위치를 가리킨다.
     char *ptr = (char *)buffer;
@@ -274,7 +277,7 @@ int write( int fd, void *buffer, unsigned size ) {
     if ( fd == STDIN_FILENO ) return -1;
 
     // 버퍼의 주소를 검증한다.
-    check_address( buffer );
+    check_valid_buffer( buffer, size, false );
     int bytes_write = 0;
 
     // 파일 시스템 작업을 하는 동안, 락을 걸어준다.
@@ -323,8 +326,21 @@ void close( int fd ) {
     process_close_file( fd );
 }
 
-void check_address( void *addr ) {
+struct page *check_address( void *addr ) {
     if ( addr == NULL || !is_user_vaddr( addr ) ) {
         exit( -1 );
+    }
+
+    struct thread *curr = thread_current();
+    return spt_find_page( &curr->spt, addr );
+}
+
+void check_valid_buffer( void *buffer, size_t size, bool writable ) {
+    for ( size_t i = 0; i < size; i++ ) {
+        /* buffer가 spt에 존재하는지 검사 */
+        struct page *page = check_address( buffer + i );
+
+        if ( !page || ( writable && !( page->writable ) ) )
+            exit( -1 );
     }
 }
