@@ -18,12 +18,8 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
-
 #include "userprog/syscall.h"
-
-#ifdef VM
 #include "vm/vm.h"
-#endif
 
 static void process_cleanup( void );
 static bool load( const char *file_name, struct intr_frame *if_ );
@@ -589,92 +585,6 @@ void process_close_file( int fd ) {
     }
 }
 
-#ifndef VM
-/* 이 블록의 코드는 프로젝트 2에서만 사용됩니다.
- * 프로젝트 2 전반에 걸쳐 함수를 구현하려면 #ifndef 매크로 외부에서 구현하십시오. */
-
-/* load() helpers. */
-static bool install_page( void *upage, void *kpage, bool writable );
-/* FILE에서 OFS 오프셋에서 시작하는 세그먼트를 주소 UPAGE에 로드합니다.
- * 총 READ_BYTES + ZERO_BYTES 바이트의 가상 메모리가 초기화됩니다:
- *
- * - READ_BYTES 바이트는 FILE에서 OFS에서 시작하여 UPAGE에 읽어야 합니다.
- *
- * - READ_BYTES 뒤에 있는 UPAGE + ZERO_BYTES 바이트는 0으로 채워야 합니다.
- *
- * 이 함수로 초기화된 페이지는 WRITABLE이 true일 경우 사용자 프로세스가 수정할 수 있고,
- * 그렇지 않은 경우 읽기 전용입니다.
- *
- * 성공 시 true를 반환하고, 메모리 할당 오류나 디스크 읽기 오류가 발생하면 false를 반환합니다. */
-static bool load_segment( struct file *file, off_t ofs, uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable ) {
-    ASSERT( ( read_bytes + zero_bytes ) % PGSIZE == 0 );
-    ASSERT( pg_ofs( upage ) == 0 );
-    ASSERT( ofs % PGSIZE == 0 );
-
-    file_seek( file, ofs );
-    while ( read_bytes > 0 || zero_bytes > 0 ) {
-        /* 이 페이지를 채우는 방법을 계산합니다.
-         * FILE에서 PAGE_READ_BYTES 바이트를 읽고
-         * 마지막 PAGE_ZERO_BYTES 바이트를 0으로 채웁니다. */
-        size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-        size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-        /* 메모리 페이지를 가져옵니다. */
-        uint8_t *kpage = palloc_get_page( PAL_USER );
-        if ( kpage == NULL ) return false;
-
-        /* 이 페이지를 로드합니다. */
-        if ( file_read( file, kpage, page_read_bytes ) != (int)page_read_bytes ) {
-            palloc_free_page( kpage );
-            return false;
-        }
-        memset( kpage + page_read_bytes, 0, page_zero_bytes );
-
-        /* 프로세스의 주소 공간에 페이지를 추가합니다. */
-        if ( !install_page( upage, kpage, writable ) ) {
-            printf( "fail\n" );
-            palloc_free_page( kpage );
-            return false;
-        }
-
-        /* 다음으로 진행합니다. */
-        read_bytes -= page_read_bytes;
-        zero_bytes -= page_zero_bytes;
-        upage += PGSIZE;
-    }
-    return true;
-}
-
-/* USER_STACK에 0으로 채워진 페이지를 매핑하여 최소한의 스택을 만듭니다. */
-static bool setup_stack( struct intr_frame *if_ ) {
-    uint8_t *kpage;
-    bool success = false;
-
-    kpage = palloc_get_page( PAL_USER | PAL_ZERO );
-    if ( kpage != NULL ) {
-        success = install_page( ( (uint8_t *)USER_STACK ) - PGSIZE, kpage, true );
-        if ( success )
-            if_->rsp = USER_STACK;
-        else
-            palloc_free_page( kpage );
-    }
-    return success;
-}
-
-/* 사용자 가상 주소 UPAGE에서 커널 가상 주소 KPAGE로의 매핑을 페이지 테이블에 추가합니다.
- * WRITABLE이 true일 경우, 사용자 프로세스가 페이지를 수정할 수 있고,
- * 그렇지 않으면 읽기 전용입니다.
- * UPAGE는 이미 매핑되어 있으면 안 됩니다.
- * KPAGE는 palloc_get_page()로 사용자 풀에서 얻은 페이지여야 합니다.
- * 성공 시 true를 반환하고, UPAGE가 이미 매핑되어 있거나 메모리 할당이 실패한 경우 false를 반환합니다. */
-static bool install_page( void *upage, void *kpage, bool writable ) {
-    struct thread *t = thread_current();
-
-    /* 해당 가상 주소에 이미 페이지가 없는지 확인한 후, 페이지를 매핑합니다. */
-    return ( pml4_get_page( t->pml4, upage ) == NULL && pml4_set_page( t->pml4, upage, kpage, writable ) );
-}
-
-#else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
@@ -757,4 +667,3 @@ static bool setup_stack( struct intr_frame *if_ ) {
 
     return success;
 }
-#endif /* VM */

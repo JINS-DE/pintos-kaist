@@ -21,7 +21,7 @@ enum thread_status {
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
-#define TID_ERROR ( (tid_t)-1 ) /* Error value for tid_t. */
+#define TID_ERROR ( ( tid_t ) - 1 ) /* Error value for tid_t. */
 #define FDT_PAGES 2
 #define FDT_COUNT_LIMIT 128
 /* Thread priorities. */
@@ -101,14 +101,11 @@ struct thread {
     /* Shared between thread.c and synch.c. */
     struct list_elem elem; /* List element. */
 
-#ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint64_t *pml4; /* Page map level 4 */
-#endif
-#ifdef VM
+
     /* Table for whole virtual memory owned by thread. */
     struct supplemental_page_table spt;
-#endif
 
     /* Owned by thread.c. */
     struct intr_frame tf; /* Information for switching */
