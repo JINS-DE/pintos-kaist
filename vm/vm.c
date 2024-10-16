@@ -142,6 +142,8 @@ static void vm_stack_growth( void *addr ) {
     struct frame *frame;
     while ( new_size > 0 ) {
         vm_alloc_page( VM_ANON, upage, 1 );
+
+        // TODO: swap_in; 아래 2줄포함 do_claim으로 바꿀 것이다.
         frame = palloc_get_page( PAL_USER | PAL_ZERO );
         pml4_set_page( t->pml4, upage, frame, 1 );
 
