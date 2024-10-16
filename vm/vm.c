@@ -5,6 +5,9 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "hash.h"
+#include "stddef.h"
+#include <threads/mmu.h>
+#include <stdlib.h>
 
 static struct list frame_table;
 
@@ -111,14 +114,13 @@ static struct frame *vm_evict_frame( void ) {
  * memory is full, this function evicts the frame to get the available memory
  * space.*/
 static struct frame *vm_get_frame( void ) {
-    /* TODO: Fill this function. */
     struct frame *frame = (struct frame *)malloc( sizeof( struct frame ) );
     ASSERT( frame != NULL );
 
     frame->kva = palloc_get_page( PAL_USER | PAL_ZERO );
 
     if ( frame->kva == NULL )
-        frame = vm_evict_frame();  // Swap Out 수행
+        frame = vm_evict_frame();
     else
         list_push_back( &frame_table, &frame->frame_elem );
 
@@ -129,7 +131,21 @@ static struct frame *vm_get_frame( void ) {
 }
 
 /* Growing the stack. */
-static void vm_stack_growth( void *addr UNUSED ) {}
+static bool vm_stack_growth_word_size() {
+    bool success = false;
+    void *upage = thread_current()->alloced_stack_boundary - PGSIZE;
+
+    if ( vm_alloc_page( VM_ANON, upage, true ) ) {
+        success = vm_claim_page( upage );
+
+        if ( success ) {
+            thread_current()->alloced_stack_boundary = upage;
+            return true;
+        }
+    }
+
+    return false;
+}
 
 /* Handle the fault on write_protected page */
 static bool vm_handle_wp( struct page *page UNUSED ) {}
@@ -139,10 +155,17 @@ bool vm_try_handle_fault( struct intr_frame *f UNUSED, void *addr UNUSED, bool u
     struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
     struct page *page = spt_find_page( &thread_current()->spt, addr );
 
-    if ( addr == NULL || is_kernel_vaddr( addr ) ) return false;
-    if ( !page ) return false;
+    if ( addr == NULL || is_kernel_vaddr( addr ) )
+        return false;
 
-    return vm_do_claim_page( page );  // demand page 수행
+    if ( !page ) {
+        void *stack_pointer = user ? f->rsp : thread_current()->alloced_stack_boundary;
+        if ( stack_pointer - 8 <= addr && addr <= USER_STACK && addr >= ( 1 << 20 ) )
+            return vm_stack_growth_word_size();
+        return false;
+    }
+
+    return vm_do_claim_page( page );
 }
 
 /* Free the page.
