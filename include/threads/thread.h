@@ -136,6 +136,7 @@ struct thread {
 
     /* project3 */
     void *alloced_stack_boundary;
+    void *stack_rsp;
 };
 
 /* If false (default), use round-robin scheduler.

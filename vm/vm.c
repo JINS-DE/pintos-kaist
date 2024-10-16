@@ -141,6 +141,8 @@ static void vm_stack_growth( void *addr ) {
     // TODO: swap_in; 아래 2줄포함 do_claim으로 바꿀 것이다.
     struct frame *frame = palloc_get_page( PAL_USER | PAL_ZERO );
     pml4_set_page( t->pml4, upage, frame, 1 );
+
+    t->alloced_stack_boundary -= PGSIZE;
 }
 
 /* Handle the fault on write_protected page */
@@ -153,8 +155,8 @@ bool vm_try_handle_fault( struct intr_frame *f UNUSED, void *addr UNUSED, bool u
 
     void *rsp = NULL;
 
-    if ( !user ) {  // TODO: kernel mode vm_stack_growth
-        return false;
+    if ( !user ) {
+        rsp = thread_current()->stack_rsp;
     } else {
         rsp = f->rsp;
     }
