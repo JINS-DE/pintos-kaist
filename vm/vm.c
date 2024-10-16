@@ -132,18 +132,22 @@ static struct frame *vm_get_frame( void ) {
 }
 
 /* Growing the stack. */
-static void vm_stack_growth( void *addr, void *rsp ) {
-    int new_size = abs( rsp - addr );
-    uint64_t upage = (uint64_t)addr & ~PGMASK;
-    struct frame *frame;
-    while ( 0 < new_size ) {
-        // page alloc
-        vm_alloc_page( VM_ANON, upage, 1 );
-        upage += PGSIZE;
-        frame = palloc_get_page( PAL_USER | PAL_ZERO );
-        pml4_set_page( thread_current()->pml4, upage, frame->kva, 1 );
+static void vm_stack_growth( void *addr ) {
+    struct thread *t = thread_current();
+    void *stack_alloced_ptr = t->stack_alloced_ptr;
+    void *page_start = pg_round_down( addr );
+    int new_size = abs( stack_alloced_ptr - page_start );
+    uint64_t upage = stack_alloced_ptr - PGSIZE;
 
+    struct frame *frame;
+    while ( new_size > 0 ) {
+        vm_alloc_page( VM_ANON, upage, 1 );
+        frame = palloc_get_page( PAL_USER | PAL_ZERO );
+        pml4_set_page( t->pml4, upage, frame, 1 );
+
+        upage -= PGSIZE;
         new_size -= PGSIZE;
+        stack_alloced_ptr -= PGSIZE;
     }
 }
 
@@ -157,19 +161,16 @@ bool vm_try_handle_fault( struct intr_frame *f UNUSED, void *addr UNUSED, bool u
 
     void *rsp = NULL;
 
-    if ( !user ) {  // TODO: kernel mode
+    if ( !user ) {  // TODO: kernel mode vm_stack_growth
         return false;
-    } else {
-        rsp = f->rsp;
     }
-
-    intr_enable();
 
     if ( addr == NULL || is_kernel_vaddr( addr ) ) return false;
     if ( !page && addr < USER_STACK && addr > USER_STACK - ( 1 << 20 ) ) {
-        vm_stack_growth( addr, rsp );
+        vm_stack_growth( addr );
         return true;
     }
+    intr_enable();  // TODO: 확인 필요
 
     return vm_do_claim_page( page );  // demand page 수행
 }

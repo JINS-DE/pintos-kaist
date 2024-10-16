@@ -328,7 +328,7 @@ static void process_cleanup( void ) {
     /* 현재 프로세스의 페이지 디렉토리를 삭제하고 커널 전용 페이지 디렉토리로 전환합니다. */
     pml4 = curr->pml4;
     if ( pml4 != NULL ) {
-        /* 여기에서 올바른 순서가 중요합니다. cur->pagedir을 NULL로 설정한 후에
+         /* 여기에서 올바른 순서가 중요합니다. cur->pagedir을 NULL로 설정한 후에
          * 페이지 디렉토리를 전환해야 타이머 인터럽트가 프로세스 페이지 디렉토리로 전환하지 않습니다.
          * 기본 페이지 디렉토리를 활성화한 후에 프로세스의 페이지 디렉토리를 삭제해야 하며,
          * 그렇지 않으면 활성 페이지 디렉토리가 해제(또는 정리)된 페이지 디렉토리가 됩니다. */
@@ -662,6 +662,7 @@ static bool setup_stack( struct intr_frame *if_ ) {
 
         if ( success ) {
             if_->rsp = USER_STACK;
+            thread_current()->stack_alloced_ptr = stack_bottom;
         }
     }
 

@@ -133,6 +133,9 @@ struct thread {
     int exit_status;
 
     struct file *running;  // 추가
+
+    /* project3 */
+    void *stack_alloced_ptr;
 };
 
 /* If false (default), use round-robin scheduler.
