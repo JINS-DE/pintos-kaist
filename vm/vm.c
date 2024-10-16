@@ -133,13 +133,13 @@ static struct frame *vm_get_frame( void ) {
 /* Growing the stack. */
 static bool vm_stack_growth_word_size() {
     bool success = false;
-    void *upage = thread_current()->alloced_stack_boundary - PGSIZE;
+    void *upage = thread_current()->stack_allocated_boundary - PGSIZE;
 
     if ( vm_alloc_page( VM_ANON, upage, true ) ) {
         success = vm_claim_page( upage );
 
         if ( success ) {
-            thread_current()->alloced_stack_boundary = upage;
+            thread_current()->stack_allocated_boundary = upage;
             return true;
         }
     }
@@ -159,7 +159,7 @@ bool vm_try_handle_fault( struct intr_frame *f UNUSED, void *addr UNUSED, bool u
         return false;
 
     if ( !page ) {
-        void *stack_pointer = user ? f->rsp : thread_current()->alloced_stack_boundary;
+        void *stack_pointer = user ? f->rsp : thread_current()->stack_allocated_boundary;
         if ( stack_pointer - 8 <= addr && addr <= USER_STACK && addr >= ( 1 << 20 ) )
             return vm_stack_growth_word_size();
         return false;

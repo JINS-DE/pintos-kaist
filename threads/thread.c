@@ -523,7 +523,7 @@ static void init_thread( struct thread *t, const char *name, int priority ) {
     /* 다음 fd값을 2로 설정한다. */
     t->next_fd = 2;
 
-    t->alloced_stack_boundary = NULL;
+    t->stack_allocated_boundary = NULL;
     t->stack_rsp = NULL;
 }
 
