@@ -106,6 +106,8 @@ struct thread {
 
     /* Table for whole virtual memory owned by thread. */
     struct supplemental_page_table spt;
+    void *alloced_stack_boundary;
+    void *stack_rsp;
 
     /* Owned by thread.c. */
     struct intr_frame tf; /* Information for switching */
@@ -129,14 +131,11 @@ struct thread {
     struct semaphore load_sema;
     struct semaphore exit_sema;
     struct semaphore wait_sema;
-    unsigned magic; /* Detects stack overflow. */
     int exit_status;
 
     struct file *running;  // 추가
 
-    /* project3 */
-    void *alloced_stack_boundary;
-    void *stack_rsp;
+    unsigned magic; /* Detects stack overflow. */
 };
 
 /* If false (default), use round-robin scheduler.
