@@ -135,22 +135,12 @@ static struct frame *vm_get_frame( void ) {
 static void vm_stack_growth( void *addr ) {
     struct thread *t = thread_current();
     void *stack_alloced_ptr = t->alloced_stack_boundary;
-    void *page_start = pg_round_down( addr );
-    int new_size = abs( stack_alloced_ptr - page_start );
     uint64_t upage = stack_alloced_ptr - PGSIZE;
 
-    struct frame *frame;
-    while ( new_size > 0 ) {
-        vm_alloc_page( VM_ANON, upage, 1 );
-
-        // TODO: swap_in; 아래 2줄포함 do_claim으로 바꿀 것이다.
-        frame = palloc_get_page( PAL_USER | PAL_ZERO );
-        pml4_set_page( t->pml4, upage, frame, 1 );
-
-        upage -= PGSIZE;
-        new_size -= PGSIZE;
-        stack_alloced_ptr -= PGSIZE;
-    }
+    vm_alloc_page( VM_ANON, upage, 1 );
+    // TODO: swap_in; 아래 2줄포함 do_claim으로 바꿀 것이다.
+    struct frame *frame = palloc_get_page( PAL_USER | PAL_ZERO );
+    pml4_set_page( t->pml4, upage, frame, 1 );
 }
 
 /* Handle the fault on write_protected page */
@@ -165,10 +155,12 @@ bool vm_try_handle_fault( struct intr_frame *f UNUSED, void *addr UNUSED, bool u
 
     if ( !user ) {  // TODO: kernel mode vm_stack_growth
         return false;
+    } else {
+        rsp = f->rsp;
     }
 
     if ( addr == NULL || is_kernel_vaddr( addr ) ) return false;
-    if ( !page && addr < USER_STACK && addr > USER_STACK - ( 1 << 20 ) ) {
+    if ( !page && addr >= rsp - 8 && addr <= USER_STACK && addr >= USER_STACK - ( 1 << 20 ) ) {
         vm_stack_growth( addr );
         return true;
     }
