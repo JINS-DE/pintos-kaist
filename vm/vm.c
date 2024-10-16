@@ -134,7 +134,7 @@ static struct frame *vm_get_frame( void ) {
 /* Growing the stack. */
 static void vm_stack_growth( void *addr ) {
     struct thread *t = thread_current();
-    void *stack_alloced_ptr = t->stack_alloced_ptr;
+    void *stack_alloced_ptr = t->alloced_stack_boundary;
     void *page_start = pg_round_down( addr );
     int new_size = abs( stack_alloced_ptr - page_start );
     uint64_t upage = stack_alloced_ptr - PGSIZE;

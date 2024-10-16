@@ -523,7 +523,7 @@ static void init_thread( struct thread *t, const char *name, int priority ) {
     /* 다음 fd값을 2로 설정한다. */
     t->next_fd = 2;
 
-    t->stack_alloced_ptr = NULL;
+    t->alloced_stack_boundary = NULL;
 }
 
 /* 스케줄링될 다음 스레드를 선택하고 반환합니다.

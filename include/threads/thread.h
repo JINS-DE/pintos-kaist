@@ -135,7 +135,7 @@ struct thread {
     struct file *running;  // 추가
 
     /* project3 */
-    void *stack_alloced_ptr;
+    void *alloced_stack_boundary;
 };
 
 /* If false (default), use round-robin scheduler.
