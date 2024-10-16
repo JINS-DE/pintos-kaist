@@ -662,6 +662,7 @@ static bool setup_stack( struct intr_frame *if_ ) {
 
         if ( success ) {
             if_->rsp = USER_STACK;
+            thread_current()->alloced_stack_boundary = stack_bottom;
         }
     }
 

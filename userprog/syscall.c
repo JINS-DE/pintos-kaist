@@ -69,8 +69,9 @@ void syscall_init( void ) {
 
 /* The main system call interface */
 void syscall_handler( struct intr_frame *f UNUSED ) {
-    // TODO: Your implementation goes here.
     int sys_number = f->R.rax;
+    thread_current()->stack_rsp = f->rsp;
+
     switch ( sys_number ) {
         case SYS_HALT: /* Halt the operating system. */
             halt();
