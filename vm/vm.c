@@ -5,6 +5,9 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "hash.h"
+#include "stddef.h"
+#include <threads/mmu.h>
+#include <stdlib.h>
 
 static struct list frame_table;
 
@@ -129,18 +132,44 @@ static struct frame *vm_get_frame( void ) {
 }
 
 /* Growing the stack. */
-static void vm_stack_growth( void *addr UNUSED ) {}
+static void vm_stack_growth( void *addr, void *rsp ) {
+    int new_size = abs( rsp - addr );
+    uint64_t upage = (uint64_t)addr & ~PGMASK;
+    struct frame *frame;
+    while ( 0 < new_size ) {
+        // page alloc
+        vm_alloc_page( VM_ANON, upage, 1 );
+        upage += PGSIZE;
+        frame = palloc_get_page( PAL_USER | PAL_ZERO );
+        pml4_set_page( thread_current()->pml4, upage, frame->kva, 1 );
+
+        new_size -= PGSIZE;
+    }
+}
 
 /* Handle the fault on write_protected page */
 static bool vm_handle_wp( struct page *page UNUSED ) {}
 
 /* Return true on success */
-bool vm_try_handle_fault( struct intr_frame *f UNUSED, void *addr UNUSED, bool user UNUSED, bool write UNUSED, bool not_present UNUSED ) {
+bool vm_try_handle_fault( struct intr_frame *f UNUSED, void *addr UNUSED, bool user, bool write UNUSED, bool not_present UNUSED ) {
     struct supplemental_page_table *spt UNUSED = &thread_current()->spt;
     struct page *page = spt_find_page( &thread_current()->spt, addr );
 
+    void *rsp = NULL;
+
+    if ( !user ) {  // TODO: kernel mode
+        return false;
+    } else {
+        rsp = f->rsp;
+    }
+
+    intr_enable();
+
     if ( addr == NULL || is_kernel_vaddr( addr ) ) return false;
-    if ( !page ) return false;
+    if ( !page && addr < USER_STACK && addr > USER_STACK - ( 1 << 20 ) ) {
+        vm_stack_growth( addr, rsp );
+        return true;
+    }
 
     return vm_do_claim_page( page );  // demand page 수행
 }

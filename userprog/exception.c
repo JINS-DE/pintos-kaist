@@ -121,7 +121,7 @@ static void page_fault( struct intr_frame *f ) {
 
     /* Turn interrupts back on (they were only off so that we could
        be assured of reading CR2 before it changed). */
-    intr_enable();
+    //  intr_enable(); // vm_try_handle_fault, rsp 꺼내고 나서 재개됨
 
     /* Determine cause. */
     not_present = ( f->error_code & PF_P ) == 0;
