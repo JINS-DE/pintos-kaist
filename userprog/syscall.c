@@ -37,6 +37,8 @@ int write( int fd, void *buffer, unsigned size );
 void seek( int fd, unsigned position );
 unsigned tell( int fd );
 
+void mmap( void *addr, size_t length, int writable, int fd, off_t offset );
+
 struct lock filesys_lock;
 
 /* System call.
@@ -127,6 +129,10 @@ void syscall_handler( struct intr_frame *f UNUSED ) {
 
         case SYS_CLOSE: /* Close a file. */
             close( f->R.rdi );
+            break;
+
+        case SYS_MMAP:
+            mmap( f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8 );
             break;
 
         default:
@@ -344,4 +350,28 @@ void check_valid_buffer( void *buffer, size_t size, bool writable ) {
         if ( !page || ( writable && !( page->writable ) ) )
             exit( -1 );
     }
+}
+
+void mmap( void *addr, size_t length, int writable, int fd, off_t offset ) {
+    // if ( offset % PGSIZE != 0 )  // 왜 정렬검사 ??? 그냥 효율성 때문? 시작주소에 맞추면 파일 위치 어캐 찾음?
+    //     return;
+    if ( addr == 0 || addr == NULL || addr % PGSIZE != 0 || is_kernel_vaddr( addr ) )  // 주소 체크
+        return;
+
+    void *currunt_page = addr;
+    void *end_page = addr + length;
+    while ( currunt_page < end_page ) {
+        if ( spt_find_page( &thread_current()->spt, current_page ) != NULL ) {  // 페이지 중첩 처리
+            return;
+        }
+        currunt_page += PGSIZE;
+    }
+
+    if ( fd < 2 || length <= 0 == NULL )  // fd, 파일크기
+        return;
+    struct file *file = process_get_file( fd );
+    if ( file == NULL )  // 파일 체크
+        return;
+
+    do_mmap( addr, length, writable, file, offset );
 }
