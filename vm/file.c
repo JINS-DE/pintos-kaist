@@ -35,7 +35,42 @@ static bool file_backed_swap_out( struct page *page ) { struct file_page *file_p
 static void file_backed_destroy( struct page *page ) { struct file_page *file_page UNUSED = &page->file; }
 
 /* Do the mmap */
-void *do_mmap( void *addr, size_t length, int writable, struct file *file, off_t offset ) {}
+void *do_mmap( void *addr, size_t length, int writable, struct file *file, off_t offset ) {
+    // TODO: list_elem 추가
+    // loop 돌면서, prev_page->next_page = cur_page
+    // 원형, 단방향 linked list (따로 list head 안둘 예정)
+}
+
+#include "threads/mmu.h"
+#include "kernel/list.h"
 
 /* Do the munmap */
-void do_munmap( void *addr ) {}
+void do_munmap( void *addr ) {
+    struct thread *t = thread_current();
+
+    // find pte
+    struct page *page = spt_find_page( &t->spt, addr );
+    struct frame *frame = page->frame;
+
+    // if dirty bit; file write and reset dirty bit
+    void *upage = pg_round_down( addr );
+    bool modified = pml4_is_dirty( t->pml4, upage );
+    if ( modified ) {
+        const struct file *file = page->file.file;
+        const void *buffer = page->va;
+        const off_t size = page->file.page_read_bytes;  // read_bytes 만큼이라, padding 제거는 자연스럽게
+        const off_t file_ofs = page->file.offset;
+        file_write_at( file, buffer, size, file_ofs );
+        pml4_set_dirty( t->pml4, upage, true );
+    }
+
+    // delete page, frame
+    struct page *next_page = list_entry( &page->file.next_page, struct page, file.next_page );
+    spt_remove_page( &t->spt, page );
+    list_remove( frame );
+
+    // iter next page - same file backed
+    if ( next_page ) {
+        do_munmap( next_page->va );
+    }
+}
