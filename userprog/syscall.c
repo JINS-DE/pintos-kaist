@@ -355,13 +355,13 @@ void check_valid_buffer( void *buffer, size_t size, bool writable ) {
 void mmap( void *addr, size_t length, int writable, int fd, off_t offset ) {
     // if ( offset % PGSIZE != 0 )  // 왜 정렬검사 ??? 그냥 효율성 때문? 시작주소에 맞추면 파일 위치 어캐 찾음?
     //     return;
-    if ( addr == 0 || addr == NULL || addr % PGSIZE != 0 || is_kernel_vaddr( addr ) )  // 주소 체크
+    if ( addr == 0 || addr == NULL || (int64_t)addr % PGSIZE != 0 || is_kernel_vaddr( addr ) )  // 주소 체크
         return;
 
     void *currunt_page = addr;
     void *end_page = addr + length;
     while ( currunt_page < end_page ) {
-        if ( spt_find_page( &thread_current()->spt, current_page ) != NULL ) {  // 페이지 중첩 처리
+        if ( spt_find_page( &thread_current()->spt, currunt_page ) != NULL ) {  // 페이지 중첩 처리
             return;
         }
         currunt_page += PGSIZE;
