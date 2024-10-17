@@ -35,7 +35,11 @@ static bool file_backed_swap_out( struct page *page ) { struct file_page *file_p
 static void file_backed_destroy( struct page *page ) { struct file_page *file_page UNUSED = &page->file; }
 
 /* Do the mmap */
-void *do_mmap( void *addr, size_t length, int writable, struct file *file, off_t offset ) {}
+void *do_mmap( void *addr, size_t length, int writable, struct file *file, off_t offset ) {
+    // TODO: list_elem 추가
+    // loop 돌면서, prev_page->next_page = cur_page
+    // 원형, 단방향 linked list (따로 list head 안둘 예정)
+}
 
 #include "threads/mmu.h"
 #include "kernel/list.h"
@@ -59,8 +63,12 @@ void do_munmap( void *addr ) {
     }
 
     // delete page, frame
+    struct page *next_page = list_entry( &page->file.next_page, struct page, file.next_page );
     spt_remove_page( &t->spt, page );
     list_remove( frame );
 
-    // iter next page - same file backed (next file page - 새로운 멤버 변수 넣기)
+    // iter next page - same file backed
+    if ( next_page ) {
+        do_munmap( next_page->va );
+    }
 }
