@@ -53,13 +53,15 @@ void do_munmap( void *addr ) {
     struct frame *frame = page->frame;
 
     // if dirty bit; file write and reset dirty bit
-    bool modified = pml4_is_dirty( t->pml4, pg_round_down( addr ) );
+    void *upage = pg_round_down( addr );
+    bool modified = pml4_is_dirty( t->pml4, upage );
     if ( modified ) {
         const struct file *file = page->file.file;
         const void *buffer = page->va;
         const off_t size = page->file.page_read_bytes;  // read_bytes 만큼이라, padding 제거는 자연스럽게
         const off_t file_ofs = page->file.offset;
         file_write_at( file, buffer, size, file_ofs );
+        pml4_set_dirty( t->pml4, upage, true );
     }
 
     // delete page, frame
